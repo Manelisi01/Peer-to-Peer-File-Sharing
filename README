@@ -3,9 +3,9 @@
 This project implements a simple **Peer-to-Peer (P2P) file sharing system** using Java.  
 The system consists of three main components: **Tracker**, **Seeder**, and **Leecher**.
 
-- The **Tracker** manages peer information.
-- The **Seeder** shares files.
-- The **Leecher** downloads files from multiple seeders.
+ The **Tracker** manages peer information.
+ The **Seeder** shares files.
+ The **Leecher** downloads files from multiple seeders.
 
 
 ## Components
@@ -28,7 +28,7 @@ It also provides a graphical user interface (GUI) to display the download progre
 ## How to Run
 
 ### Prerequisites
-- Java Development Kit (JDK) installed
+Java Development Kit (JDK) installed
 
 
 
