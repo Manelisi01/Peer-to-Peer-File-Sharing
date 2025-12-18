@@ -7,7 +7,6 @@ The system consists of three main components: **Tracker**, **Seeder**, and **Lee
 - The **Seeder** shares files.
 - The **Leecher** downloads files from multiple seeders.
 
----
 
 ## Components
 
@@ -25,14 +24,13 @@ The Leecher is responsible for downloading a file from multiple seeders.
 It communicates with the Tracker to obtain a list of seeders, downloads the file in chunks, and assembles the file.  
 It also provides a graphical user interface (GUI) to display the download progress.
 
----
 
 ## How to Run
 
 ### Prerequisites
 - Java Development Kit (JDK) installed
 
----
+
 
 ### Steps to Run
 
