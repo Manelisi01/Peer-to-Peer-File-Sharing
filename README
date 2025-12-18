@@ -1,43 +1,73 @@
-# P2P File Sharing System
+P2P File Sharing System
 
-This project implements a simple **Peer-to-Peer (P2P) file sharing system** using Java.  
-The system consists of three main components: **Tracker**, **Seeder**, and **Leecher**.
+This project implements a simple Peer-to-Peer (P2P) file sharing system using Java.
+The system consists of three main components: Tracker, Seeder, and Leecher.
 
- The **Tracker** manages peer information.
- The **Seeder** shares files.
- The **Leecher** downloads files from multiple seeders.
+The Tracker manages peer information
 
+The Seeder shares files
 
-## Components
+The Leecher downloads files from multiple seeders
 
-### 1. Tracker
-The Tracker is responsible for managing peer information in the P2P network.  
+Components
+1. Tracker
+
+The Tracker is responsible for managing peer information in the P2P network.
 It listens for incoming UDP messages from seeders and leechers, handles registration, queries, and updates, and periodically cleans up stale peers.
 
-### 2. Seeder
-The Seeder is responsible for sharing a file with leechers.  
-It splits the file into chunks, registers with the Tracker, and serves chunks to clients upon request.  
+2. Seeder
+
+The Seeder is responsible for sharing a file with leechers.
+It splits the file into chunks, registers with the Tracker, and serves chunks to clients upon request.
 It also sends periodic heartbeats to the Tracker to maintain its availability status.
 
-### 3. Leecher
-The Leecher is responsible for downloading a file from multiple seeders.  
-It communicates with the Tracker to obtain a list of seeders, downloads the file in chunks, and assembles the file.  
+3. Leecher
+
+The Leecher is responsible for downloading a file from multiple seeders.
+It communicates with the Tracker to obtain a list of seeders, downloads the file in chunks, and assembles the file.
 It also provides a graphical user interface (GUI) to display the download progress.
 
+How to Run
+Prerequisites
 
-## How to Run
-
-### Prerequisites
 Java Development Kit (JDK) installed
 
+Steps to Run
+1. Compile the Java Classes
 
-
-### Steps to Run
-
-#### 1. Compile the Java Classes
-
-Open a terminal and navigate to the directory containing the `src` and `bin` folders.  
+Open a terminal and navigate to the directory containing the src and bin folders.
 Compile the classes using:
 
-```bash
 make
+
+2. Start the Tracker
+
+The Tracker must be running before starting any Seeders or Leechers.
+
+java Tracker
+
+
+The Tracker always listens on port 5000.
+
+3. Start a Seeder
+
+Provide the file name, Tracker IP, Seeder IP, and Seeder port as command-line arguments.
+The file must be in the directory where you run the command.
+
+Example:
+
+java Seeder file.txt 127.0.0.1 127.0.0.1 6000
+
+
+This starts a Seeder sharing file.txt on port 6000.
+
+4. Start a Leecher
+
+Provide the target file path, Tracker IP, Leecher IP, and Leecher port.
+
+Example:
+
+java Leecher /path/to/downloaded_file.txt 127.0.0.1 127.0.0.1 7000
+
+
+This starts a Leecher that downloads the file and listens on port 7000.
