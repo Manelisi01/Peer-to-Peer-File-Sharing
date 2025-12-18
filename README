@@ -1,62 +1,45 @@
-#P2P File Sharing System
+# P2P File Sharing System
 
-This project implements a simple Peer-to-Peer (P2P) file sharing system using Java. The system consists of three main components: **Tracker**, **Seeder**, and **Leecher**. The Tracker manages peer information, the Seeder shares files, and the Leecher downloads files from multiple seeders.
+This project implements a simple **Peer-to-Peer (P2P) file sharing system** using Java.  
+The system consists of three main components: **Tracker**, **Seeder**, and **Leecher**.
 
-##Components
+- The **Tracker** manages peer information.
+- The **Seeder** shares files.
+- The **Leecher** downloads files from multiple seeders.
 
-###1. Tracker
-The Tracker is responsible for managing peer information in the P2P network. It listens for incoming UDP messages from seeders and leechers, handles registration, queries, and updates, and periodically cleans up stale peers.
+---
 
-###2. Seeder
-The Seeder is responsible for sharing a file with leechers. It splits the file into chunks, registers with the Tracker, and serves chunks to clients upon request. It also sends periodic heartbeats to the Tracker to maintain its availability status.
+## Components
 
-###3. Leecher
-The Leecher is responsible for downloading a file from multiple seeders. It communicates with the Tracker to get a list of seeders, downloads the file in chunks, and assembles the file. It also provides a graphical user interface (GUI) to display the download progress.
+### 1. Tracker
+The Tracker is responsible for managing peer information in the P2P network.  
+It listens for incoming UDP messages from seeders and leechers, handles registration, queries, and updates, and periodically cleans up stale peers.
 
-##How to Run
+### 2. Seeder
+The Seeder is responsible for sharing a file with leechers.  
+It splits the file into chunks, registers with the Tracker, and serves chunks to clients upon request.  
+It also sends periodic heartbeats to the Tracker to maintain its availability status.
 
-###Prerequisites
-- Java Development Kit (JDK) installed.
+### 3. Leecher
+The Leecher is responsible for downloading a file from multiple seeders.  
+It communicates with the Tracker to obtain a list of seeders, downloads the file in chunks, and assembles the file.  
+It also provides a graphical user interface (GUI) to display the download progress.
 
-###Steps to Run
+---
 
-1. **Compile the Java Classes:**
+## How to Run
 
-Open a terminal and navigate to the directory containing these files "src" and "bin". Compile the classes using the following command:
-   ```bash
-   make
+### Prerequisites
+- Java Development Kit (JDK) installed
 
-2. **Start the Tracker**
+---
 
-The Tracker must be running before starting any Seeders or Leechers. Run the Tracker using the following command:
+### Steps to Run
+
+#### 1. Compile the Java Classes
+
+Open a terminal and navigate to the directory containing the `src` and `bin` folders.  
+Compile the classes using:
 
 ```bash
-java Tracker
-
-The Tracker will start listening on port 5000 always.
-
-3. **Start a Seeder**
-
-To start a Seeder, you need to provide the file name, Tracker IP, Seeder IP, and Seeder port as command-line arguments. The file must be in the directory where you are running the commands. For example:
-
-   ```bash
-   java Seeder file.txt 127.0.0.1 127.0.0.1 6000
-   
-This command will start a Seeder that shares file.txt and listens on port 6000.
-   
- 4. **Start a Leecher**
- 
-To start a Leecher, you need to provide the target file name, Tracker IP, Leecher IP, and Leecher port as command-line arguments. For example:
-
-   ```bash
-   java Leecher /path/to/downloaded_file.txt 127.0.0.1 127.0.0.1 7000
-   
-This command will start a Leecher that downloads file.txt and listens on port 7000.
-
-
-**Note: **
-
-1. Ensure that the Tracker, Seeder, and Leecher are running on the same network or can communicate with each other.
-
-2. The Seeder and Leecher must use the correct IP address of the Tracker.
-   
+make
