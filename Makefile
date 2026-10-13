@@ -1,24 +1,14 @@
-JFLAGS = -g
-SRCDIR = src
-BINDIR = bin
-JC = javac
+.PHONY: run test package clean
 
-.SUFFIXES: .java .class
+run:
+	mvn spring-boot:run
 
-#.java.class:
-#	$(JC) $(JFLAGS) -d $(BINDIR) $*.java
-$(BINDIR)/%.class : $(SRCDIR)/%.java
-	$(JC) -d $(BINDIR)/ $(SRCDIR)/*.java
+test:
+	mvn test
 
-CLASSES = \
-	$(BINDIR)/Tracker.class \
-	$(BINDIR)/Seeder.class \
-	$(BINDIR)/Leecher.class
-	
-default: $(CLASSES)
-
-classes: $(CLASSES:.java=.class)
+package:
+	mvn package
 
 clean:
-	$(RM) $(BINDIR)/*.class
+	mvn clean
 	
