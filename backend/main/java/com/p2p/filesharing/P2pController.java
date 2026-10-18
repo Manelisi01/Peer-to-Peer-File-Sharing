@@ -2,9 +2,17 @@ package com.p2p.filesharing;
 
 import jakarta.validation.Valid;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -94,5 +102,30 @@ public class P2pController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Download job not found.");
         }
         return job;
+    }
+
+    /** Streams a completed download to the browser; it is then deleted from the server. */
+    @GetMapping("/downloads/{id}/file")
+    public ResponseEntity<StreamingResponseBody> downloadedFile(@PathVariable String id)
+            throws IOException {
+        Path file = downloadService.getCompletedFile(id);
+        if (file == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Completed file not found.");
+        }
+        StreamingResponseBody body = out -> {
+            try (InputStream in = Files.newInputStream(file)) {
+                in.transferTo(out);
+            }
+            // Only reached if the whole file was written; an interrupted transfer keeps the
+            // file until the expiry timer removes it, so the user can retry.
+            downloadService.finishDelivery(id);
+        };
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(Files.size(file))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(file.getFileName().toString(), StandardCharsets.UTF_8)
+                        .build().toString())
+                .body(body);
     }
 }

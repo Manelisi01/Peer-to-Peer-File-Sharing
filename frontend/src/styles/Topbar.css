@@ -1,0 +1,34 @@
+.topbar { height: 66px; padding: 0 5.4%; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; }
+.brand-mark { width: 30px; height: 30px; display: grid; place-items: center; color: #fff; background: var(--forest); border-radius: 8px 8px 8px 2px; }
+.brand-name { font-size: 17px; font-weight: 800; letter-spacing: 0; }
+.brand-period { color: var(--orange); }
+.brand-divider { width: 1px; height: 19px; background: var(--line); margin: 0 5px; }
+.brand-caption { color: #929c97; font-family: var(--mono); font-size: 9px; letter-spacing: 0; }
+.topbar-right { display: flex; align-items: center; gap: 20px; }
+.connection-indicator { display: flex; align-items: center; gap: 8px; color: #596660; font-size: 11px; font-weight: 700; }
+.connection-dot { position: relative; width: 7px; height: 7px; border-radius: 50%; background: #42a879; }
+.is-online .connection-dot::after { position: absolute; inset: -4px; content: ''; border: 1px solid #85cba7; border-radius: 50%; animation: pulse 2s infinite; }
+.is-offline .connection-dot { background: #d17855; }
+.network-trigger { display: flex; align-items: center; gap: 9px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: #45504b; font-size: 11px; font-weight: 700; cursor: pointer; }
+.network-trigger:hover { border-color: #b3c8bc; background: #f8faf7; }
+.network-trigger-icon { display: grid; color: var(--forest); }
+.network-trigger > svg:last-child { color: #88938d; transition: transform .18s; }
+.network-trigger > .chevron-up { transform: rotate(180deg); }
+
+@keyframes pulse { 0%, 100% { transform: scale(.8); opacity: .8; } 50% { transform: scale(1.35); opacity: 0; } }
+
+@media (max-width: 860px) {
+  .topbar { padding: 0 4%; }
+}
+@media (max-width: 680px) {
+  .topbar { height: 59px; padding: 0 16px; }
+  .brand { gap: 8px; }
+  .brand-caption, .brand-divider { display: none; }
+  .topbar-right { gap: 8px; }
+  .connection-indicator { gap: 6px; font-size: 10px; }
+  .topbar .refresh-button { width: 30px; }
+  .network-trigger { gap: 6px; padding: 7px; font-size: 0; }
+  .network-trigger-icon { width: 18px; height: 18px; place-items: center; }
+  .network-trigger > svg:last-child { display: none; }
+}

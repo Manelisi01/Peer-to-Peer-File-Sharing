@@ -1,0 +1,13 @@
+.activity-panel { margin-top: 18px; padding: 17px 21px 15px; }
+.section-heading.activity-heading { min-height: 43px; }
+.activity-actions { display: flex; align-items: center; gap: 9px; }
+.history-clear { height: 27px; display: inline-flex; align-items: center; gap: 5px; padding: 0 7px; border: 1px solid transparent; border-radius: 4px; color: #8a746b; background: transparent; font-size: 9px; cursor: pointer; }
+.history-clear:hover { border-color: #f1ddd3; color: #aa543e; background: #fff8f4; }
+.activity-count { align-self: center; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; color: #829087; font-family: var(--mono); font-size: 8px; letter-spacing: 0; }
+.empty-activity { min-height: 56px; display: flex; align-items: center; gap: 11px; color: #929d96; font-size: 10px; }
+.activity-line { width: 21px; height: 1px; background: #d4ded5; }
+.job-list { display: grid; }
+
+@media (max-width: 680px) {
+  .activity-panel { margin-top: 13px; padding: 15px; }
+}

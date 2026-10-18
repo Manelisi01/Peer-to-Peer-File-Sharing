@@ -1,0 +1,19 @@
+/* Primitives used by more than one component. Loaded before component styles. */
+.eyebrow { margin: 0; color: #75827a; font-family: var(--mono); font-size: 9px; font-weight: 500; letter-spacing: 0; }
+
+.icon-button { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid transparent; background: transparent; border-radius: 8px; color: #68736e; cursor: pointer; }
+.icon-button:hover { background: #f2f5f1; border-color: var(--line); }
+
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+.section-heading { min-height: 41px; display: flex; justify-content: space-between; align-items: flex-start; }
+.section-heading h2 { display: flex; align-items: center; gap: 8px; margin: 5px 0 0; color: #26322e; font-size: 18px; line-height: 1.2; font-weight: 700; letter-spacing: 0; }
+.heading-icon { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 7px; color: #74847b; }
+
+.input-with-button { display: flex; gap: 7px; }
+.input-with-button input { min-width: 0; flex: 1; height: 39px; padding: 0 11px; border: 1px solid #dfe5df; border-radius: 5px; color: #2f3b35; background: #fbfcfa; font-size: 11px; transition: border-color .15s, box-shadow .15s; }
+.input-with-button input::placeholder { color: #a5aea8; }
+.input-with-button input:focus { border-color: #69aa85; outline: 0; box-shadow: 0 0 0 3px #3e9b6720; }
+
+.spin { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes appear { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }

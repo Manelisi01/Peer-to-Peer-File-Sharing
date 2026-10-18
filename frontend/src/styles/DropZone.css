@@ -1,0 +1,15 @@
+.dropzone { min-height: 75px; display: flex; align-items: center; gap: 12px; margin: 17px 0 17px; padding: 12px 13px; border: 1px dashed #b8c9be; border-radius: 7px; background: #fafcf9; cursor: pointer; transition: border-color .16s, background .16s, transform .16s; }
+.dropzone:hover, .dropzone.is-dragging { border-color: var(--forest); background: #f0f7f1; }
+.dropzone.is-dragging { transform: scale(1.01); }
+.dropzone input { display: none; }
+.drop-icon { width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 auto; color: var(--forest); background: #e6f2e9; border-radius: 7px; }
+.drop-copy { min-width: 0; display: grid; gap: 4px; }
+.drop-copy strong { color: #36433c; font-size: 11px; }
+.drop-copy small { overflow: hidden; color: #849088; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.drop-action { display: flex; align-items: center; gap: 5px; margin-left: auto; padding: 7px 9px; border: 1px solid #dce5dd; border-radius: 5px; color: #4e6759; background: #fff; font-size: 10px; font-weight: 700; white-space: nowrap; }
+
+@media (max-width: 680px) {
+  .dropzone { gap: 8px; padding: 10px; }
+  .drop-copy small { max-width: 155px; }
+  .drop-action { padding: 7px; font-size: 9px; }
+}

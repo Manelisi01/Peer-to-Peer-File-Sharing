@@ -1,0 +1,13 @@
+.transfer-panel { min-height: 442px; padding: 20px 21px 15px; }
+.transfer-heading { margin-bottom: 18px; }
+.peer-search-form > label { display: block; margin-bottom: 7px; color: #7f8b84; font-family: var(--mono); font-size: 8px; letter-spacing: 0; }
+#hash-input { font-family: var(--mono); font-size: 10px; }
+.search-button { height: 39px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 0; border-radius: 5px; color: #fff; background: var(--forest); font-size: 10px; font-weight: 700; white-space: nowrap; cursor: pointer; transition: background .16s, transform .16s; }
+.search-button:hover { background: var(--forest-dark); transform: translateY(-1px); }
+
+@media (max-width: 860px) {
+  .transfer-panel { padding-right: 15px; padding-left: 15px; }
+}
+@media (max-width: 680px) {
+  .transfer-panel { min-height: auto; padding: 17px 15px 14px; padding-bottom: 16px; }
+}

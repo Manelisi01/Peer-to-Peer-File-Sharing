@@ -1,0 +1,24 @@
+.metrics-row { min-height: 77px; display: grid; grid-template-columns: 1fr 1fr 1fr auto; align-items: center; margin-bottom: 20px; padding: 0 19px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.metric { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.metric-icon { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 8px; }
+.metric-icon.green { color: #2c8965; background: #eaf5ee; }
+.metric-icon.orange { color: #d8704b; background: #fff0e8; }
+.metric-icon.blue { color: #4c7e92; background: #eaf3f5; }
+.metric > div { display: grid; gap: 4px; }
+.metric-label { color: #86928b; font-family: var(--mono); font-size: 8px; letter-spacing: 0; }
+.metric strong { color: #303c37; font-size: 13px; font-weight: 700; }
+.metric-protocol { display: flex; align-items: center; gap: 7px; color: #7a8981; font-family: var(--mono); font-size: 9px; white-space: nowrap; }
+.protocol-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); }
+.protocol-separator { color: #c3cbc5; }
+
+@media (max-width: 860px) {
+  .metrics-row { padding: 0 13px; grid-template-columns: repeat(3, 1fr); }
+  .metric-protocol { display: none; }
+}
+@media (max-width: 680px) {
+  .metrics-row { min-height: 68px; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-bottom: 13px; padding: 0 8px; }
+  .metric { gap: 6px; }
+  .metric-icon { width: 27px; height: 27px; flex: 0 0 auto; }
+  .metric-label { font-size: 7px; }
+  .metric strong { font-size: 11px; }
+}

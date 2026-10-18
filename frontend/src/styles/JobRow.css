@@ -1,0 +1,24 @@
+.job-row { min-height: 55px; display: grid; grid-template-columns: 31px minmax(150px, 1fr) minmax(130px, .65fr) 114px; align-items: center; gap: 10px; border-top: 1px solid #eef1ed; }
+.job-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; color: #648b74; background: #f0f5f0; }
+.job-icon.complete { color: #30805c; background: #eaf5ed; }
+.job-icon.failed { color: #bc5c42; background: #fff0e9; }
+.job-file { min-width: 0; display: grid; gap: 4px; }
+.job-file strong { overflow: hidden; color: #3a4640; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.job-file small { overflow: hidden; color: #929c96; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.job-save { width: fit-content; height: 26px; display: inline-flex; align-items: center; padding: 0 7px; border: 1px solid #cddfd1; border-radius: 5px; color: #27684f; background: #f5faf5; font-size: 9px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.job-save:hover { border-color: #87b69b; background: #eaf5ec; }
+.job-progress { display: flex; align-items: center; gap: 9px; }
+.progress-track { height: 5px; flex: 1; overflow: hidden; border-radius: 8px; background: #edf1ed; }
+.progress-track > span { height: 100%; display: block; border-radius: inherit; background: #4b9b70; transition: width .35s ease; }
+.progress-track > .progress-complete { background: #81bf72; }
+.progress-track > .progress-failed { background: #dc7c57; }
+.job-progress small { min-width: 27px; color: #78867d; font-family: var(--mono); font-size: 9px; text-align: right; }
+
+@media (max-width: 680px) {
+  .job-row { min-height: 64px; grid-template-columns: 29px minmax(0, 1fr) 93px; gap: 7px; padding: 7px 0; }
+  .job-progress { grid-column: 2; grid-row: 2; padding: 0 0 4px; }
+  .job-progress small { font-size: 8px; }
+  /* Placed by the parent grid, so the rule lives here; extra specificity beats StatusPill.css. */
+  .job-row .status-pill { grid-column: 3; grid-row: 1; min-width: 78px; }
+  .job-file small { max-width: 180px; }
+}

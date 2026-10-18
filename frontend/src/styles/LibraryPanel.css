@@ -1,0 +1,23 @@
+/* --col-size / --col-state are shared with FileRow so the header and rows always line up. */
+.library-panel { --col-size: 53px; --col-state: 118px; min-height: 442px; padding: 20px 21px 15px; }
+.count-badge { display: inline-grid; min-width: 19px; height: 19px; place-items: center; padding: 0 5px; border-radius: 20px; background: #edf4ef; color: var(--forest); font-family: var(--mono); font-size: 10px; font-weight: 500; }
+.file-list-heading { display: grid; grid-template-columns: minmax(0, 1fr) var(--col-size) var(--col-state); padding: 0 4px 8px 48px; border-bottom: 1px solid var(--line); color: #9aa49e; font-family: var(--mono); font-size: 8px; letter-spacing: 0; }
+.file-list-heading span:last-child { text-align: right; }
+.file-list { min-height: 203px; max-height: 244px; overflow-y: auto; }
+.empty-files { min-height: 194px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #77857c; text-align: center; }
+.empty-mark { width: 39px; height: 39px; display: grid; place-items: center; margin-bottom: 9px; border-radius: 50%; color: #74947f; background: #edf4ed; }
+.empty-files strong { color: #526159; font-size: 11px; }
+.empty-files small { margin-top: 5px; color: #98a19b; font-size: 10px; }
+.library-footer { display: flex; align-items: center; gap: 7px; padding-top: 12px; color: #829087; font-size: 9px; }
+.library-footer svg { color: #529674; }
+
+@media (max-width: 860px) {
+  .library-panel { --col-size: 45px; --col-state: 116px; padding-right: 15px; padding-left: 15px; }
+  .file-list-heading { padding-left: 42px; }
+}
+@media (max-width: 680px) {
+  .library-panel { --col-size: 43px; min-height: auto; padding: 17px 15px 14px; }
+  .file-list { min-height: 135px; max-height: 245px; }
+  .empty-files { min-height: 134px; }
+  .file-list-heading { padding-left: 41px; }
+}

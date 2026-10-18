@@ -1,5 +1,6 @@
 package com.p2p.filesharing;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -23,6 +24,10 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.Comparator;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,9 +40,17 @@ public class DownloadService {
     private static final Logger log = LoggerFactory.getLogger(DownloadService.class);
     private static final int SOCKET_TIMEOUT_MS = 10000;
     private static final int MAX_DOWNLOAD_THREADS = 8;
+    private static final String TEMP_DIR = ".downloads";
 
     @Value("${p2p.storage-dir:./data}")
     private String storageDirectory;
+
+    // false = downloads are temporary: handed to the browser, then deleted from the server.
+    @Value("${p2p.keep-downloads:false}")
+    private boolean keepDownloads;
+
+    @Value("${p2p.download-ttl-minutes:30}")
+    private long downloadTtlMinutes;
 
     @Value("${p2p.chunk-size:524288}")
     private int chunkSize;
@@ -45,7 +58,9 @@ public class DownloadService {
     private final TrackerService trackerService;
     private final SeederService seederService;
     private final Map<String, DownloadJob> jobs = new ConcurrentHashMap<>();
+    private final Map<String, Path> downloadPaths = new ConcurrentHashMap<>();
     private final ExecutorService jobExecutor = Executors.newCachedThreadPool();
+    private final ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor();
 
     public DownloadService(TrackerService trackerService, SeederService seederService) {
         this.trackerService = trackerService;
@@ -53,8 +68,14 @@ public class DownloadService {
     }
 
     public DownloadJob startDownload(DownloadRequest request) {
-        Path destination = resolveStoragePath(request.targetFile());
-        DownloadJob job = new DownloadJob(storageRelativePath(destination));
+        Path requested = resolveStoragePath(request.targetFile());
+        String displayName = storageRelativePath(requested);
+        DownloadJob job = new DownloadJob(displayName);
+        // Temporary downloads get their own folder so they can never overwrite a library file.
+        Path destination = keepDownloads
+                ? requested
+                : resolveStoragePath(TEMP_DIR + "/" + job.getId() + "/" + displayName);
+        downloadPaths.put(job.getId(), destination);
         jobs.put(job.getId(), job);
         jobExecutor.submit(() -> runDownload(job, destination, request));
         return job;
@@ -62,6 +83,60 @@ public class DownloadService {
 
     public DownloadJob getJob(String id) {
         return jobs.get(id);
+    }
+
+    /** Path of a finished download, or null if the job is unknown, unfinished or the file is gone. */
+    public Path getCompletedFile(String id) {
+        DownloadJob job = jobs.get(id);
+        Path file = downloadPaths.get(id);
+        if (job == null || file == null || !"COMPLETED".equals(job.getStatus())) {
+            return null;
+        }
+        return Files.isRegularFile(file) ? file : null;
+    }
+
+    /** Called once the browser has received the file. No-op when downloads are kept. */
+    public void finishDelivery(String id) {
+        discardDownload(id, "Saved to your device and removed from the server.");
+    }
+
+    private void discardDownload(String id, String message) {
+        if (keepDownloads) {
+            return;
+        }
+        Path file = downloadPaths.remove(id);
+        if (file == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(file);
+            Path parent = file.getParent();
+            if (parent != null && !parent.getFileName().toString().equals(TEMP_DIR)) {
+                Files.deleteIfExists(parent);
+            }
+        } catch (IOException e) {
+            log.warn("Could not remove temporary download {}", file, e);
+        }
+        DownloadJob job = jobs.get(id);
+        if (job != null) {
+            job.update(job.getStatus(), message);
+        }
+    }
+
+    @PostConstruct
+    void clearLeftoverTemporaryDownloads() {
+        if (keepDownloads) {
+            return;
+        }
+        Path dir = resolveStoragePath(TEMP_DIR);
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(dir)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+        } catch (IOException e) {
+            log.warn("Could not clear {}", dir, e);
+        }
     }
 
     public String hashFile(String fileName) throws IOException {
@@ -108,6 +183,8 @@ public class DownloadService {
     @PreDestroy
     void stop() {
         jobExecutor.shutdownNow();
+        cleaner.shutdownNow();
+        clearLeftoverTemporaryDownloads();
     }
 
     private void runDownload(DownloadJob job, Path destination, DownloadRequest request) {
@@ -143,12 +220,19 @@ public class DownloadService {
             temporaryFile = null;
 
             String message = "Download complete and verified.";
-            try {
-                seederService.startSharing(destination, request.peerIp(), request.peerPort(),
-                        request.trackerHost(), request.trackerPort());
-            } catch (Exception e) {
-                message += " Could not start seeding: " + e.getMessage();
-                log.warn("Downloaded file could not be started as a seeder", e);
+            if (keepDownloads) {
+                try {
+                    seederService.startSharing(destination, request.peerIp(), request.peerPort(),
+                            request.trackerHost(), request.trackerPort());
+                } catch (Exception e) {
+                    message += " Could not start seeding: " + e.getMessage();
+                    log.warn("Downloaded file could not be started as a seeder", e);
+                }
+            } else {
+                message += " Save it to your device within " + downloadTtlMinutes + " minutes.";
+                cleaner.schedule(
+                        () -> discardDownload(job.getId(), "Expired and removed from the server."),
+                        downloadTtlMinutes, TimeUnit.MINUTES);
             }
             job.setProgress(100);
             job.update("COMPLETED", message);
