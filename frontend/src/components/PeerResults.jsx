@@ -3,9 +3,12 @@ import { CircleAlert, Network, Search } from 'lucide-react';
 export default function PeerResults({ peers, searchDone }) {
   let body;
   if (!searchDone) {
-    body = <div className="peer-placeholder"><span className="placeholder-ring"><Search size={17} /></span><span>Enter a file hash to discover active seeders.</span></div>;
+
+    body = <div className="line-break"><br/></div>;
+
   } else if (peers.length === 0) {
     body = <div className="peer-placeholder no-peer"><span className="placeholder-ring"><CircleAlert size={17} /></span><span>No active seeder found for this hash.</span></div>;
+ 
   } else {
     body = peers.map((peer) => (
       <div className="peer-row" key={`${peer.ip}:${peer.port}`}>

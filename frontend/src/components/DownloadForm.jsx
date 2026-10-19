@@ -12,7 +12,11 @@ export default function DownloadForm({ submitting, onSubmit }) {
 
   return (
     <form className="download-form" onSubmit={handleSubmit}>
-      <div className="download-form-title"><span className="download-icon"><ArrowDownToLine size={16} /></span><div><strong>Receive this file</strong><small>Verified before it is saved</small></div></div>
+      <div className="download-form-title">
+        <span className="download-icon"><ArrowDownToLine size={16} /></span>
+        <div><strong>Receive this file</strong><small>Verified before it is saved</small></div>
+      </div>
+
       <label htmlFor="target-file">SAVE AS</label>
       <div className="input-with-button">
         <input id="target-file" value={targetFile} onChange={(e) => setTargetFile(e.target.value)} placeholder="filename.ext" />
