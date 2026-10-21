@@ -14,7 +14,9 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -29,11 +31,15 @@ import org.springframework.stereotype.Service;
 public class SeederService {
 
     private static final Logger log = LoggerFactory.getLogger(SeederService.class);
+    private static final int HASH_BYTES = 32;
+    private static final int REQUEST_TIMEOUT_MS = 10000;
 
     @Value("${p2p.chunk-size:524288}")
     private int chunkSize;
 
-    private final Map<Integer, SharedFile> sharedFiles = new ConcurrentHashMap<>();
+    // One TCP listener per port. Any number of files can be shared on the same port:
+    // every request starts with the file's SHA-256, which selects the file to serve.
+    private final Map<Integer, PortListener> listeners = new ConcurrentHashMap<>();
     private final ExecutorService workers = Executors.newCachedThreadPool();
 
     public synchronized SharingInfo startSharing(
@@ -49,69 +55,102 @@ public class SeederService {
         if (!Files.isRegularFile(file)) {
             throw new IllegalArgumentException("Not a regular file: " + file);
         }
-        SharedFile existing = sharedFiles.get(peerPort);
-        if (existing != null) {
-            if (existing.file.equals(file.toAbsolutePath().normalize())) {
-                return existing.info;
-            }
-            throw new IllegalArgumentException("Peer port is already in use: " + peerPort);
-        }
+        Path normalizedFile = file.toAbsolutePath().normalize();
 
         long fileSize = Files.size(file);
         long count = fileSize == 0 ? 0 : (fileSize + chunkSize - 1) / chunkSize;
         if (count > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("File is too large for the peer protocol.");
         }
-        String hash = FileHasher.calculateSha256(file);
-        ServerSocket server = new ServerSocket(peerPort);
-        Path normalizedFile = file.toAbsolutePath().normalize();
+        String hash = FileHasher.calculateSha256(file).toLowerCase(Locale.ROOT);
+
+        // If this path is already shared but its content has changed, the old entry is stale
+        // and would serve the wrong bytes, so drop it first.
+        for (PortListener listener : List.copyOf(listeners.values())) {
+            for (SharedFile shared : List.copyOf(listener.files.values())) {
+                if (shared.file.equals(normalizedFile) && !shared.fileHash.equals(hash)) {
+                    removeShared(listener, shared);
+                }
+            }
+        }
+
+        PortListener listener = listeners.get(peerPort);
+        if (listener != null) {
+            SharedFile existing = listener.files.get(hash);
+            if (existing != null) {
+                if (existing.file.equals(normalizedFile)) {
+                    return existing.info;
+                }
+                throw new IllegalArgumentException("A file with identical content ("
+                        + existing.info.fileName() + ") is already shared on port " + peerPort + ".");
+            }
+        } else {
+            listener = new PortListener(peerPort, new ServerSocket(peerPort));
+            listeners.put(peerPort, listener);
+            PortListener started = listener;
+            workers.submit(() -> acceptClients(started));
+        }
+
         SharingInfo info = new SharingInfo(normalizedFile.getFileName().toString(), hash,
                 peerIp, peerPort, fileSize, (int) count);
         SharedFile shared = new SharedFile(normalizedFile, fileSize, (int) count,
-                server, trackerHost, trackerPort, peerIp, hash, info);
-        sharedFiles.put(peerPort, shared);
-        workers.submit(() -> acceptClients(shared));
+                trackerHost, trackerPort, peerIp, hash, info);
+        listener.files.put(hash, shared);
         sendTrackerMessage(shared, "REGISTER");
-        log.info("Sharing {} as {}:{} ({} chunks)", normalizedFile, peerIp, peerPort, count);
+        log.info("Sharing {} as {}:{} ({} chunks, {} file(s) on this port)",
+                normalizedFile, peerIp, peerPort, count, listener.files.size());
         return info;
     }
 
     public int getSharedFileCount() {
-        return sharedFiles.size();
+        return listeners.values().stream().mapToInt(l -> l.files.size()).sum();
     }
 
     public List<SharingInfo> getSharedFiles() {
-        return sharedFiles.values().stream().map(SharedFile::info).toList();
+        return listeners.values().stream()
+                .flatMap(l -> l.files.values().stream())
+                .map(SharedFile::info)
+                .toList();
     }
 
     public synchronized void stopSharing(Path file) {
         Path normalizedFile = file.toAbsolutePath().normalize();
-        List<SharedFile> matches = sharedFiles.values().stream()
-                .filter(shared -> shared.file.equals(normalizedFile))
-                .toList();
-        for (SharedFile shared : matches) {
-            if (sharedFiles.remove(shared.info.peerPort(), shared)) {
-                try {
-                    shared.server.close();
-                } catch (IOException e) {
-                    log.warn("Could not close seeder port {}", shared.info.peerPort(), e);
+        for (PortListener listener : List.copyOf(listeners.values())) {
+            for (SharedFile shared : List.copyOf(listener.files.values())) {
+                if (shared.file.equals(normalizedFile)) {
+                    removeShared(listener, shared);
                 }
-                sendTrackerMessage(shared, "UNREGISTER");
-                log.info("Stopped sharing {} on port {}", normalizedFile, shared.info.peerPort());
+            }
+        }
+    }
+
+    // Must be called with the service lock held. Closes the port once its last file is gone.
+    private void removeShared(PortListener listener, SharedFile shared) {
+        if (!listener.files.remove(shared.fileHash, shared)) {
+            return;
+        }
+        sendTrackerMessage(shared, "UNREGISTER");
+        log.info("Stopped sharing {} on port {}", shared.file, listener.port);
+        if (listener.files.isEmpty() && listeners.remove(listener.port, listener)) {
+            try {
+                listener.server.close();
+            } catch (IOException e) {
+                log.warn("Could not close seeder port {}", listener.port, e);
             }
         }
     }
 
     @Scheduled(fixedRateString = "${p2p.tracker.heartbeat-ms:30000}")
     void sendHeartbeats() {
-        sharedFiles.values().forEach(shared -> sendTrackerMessage(shared, "UPDATE"));
+        listeners.values().forEach(l ->
+                l.files.values().forEach(shared -> sendTrackerMessage(shared, "UPDATE")));
     }
 
     @PreDestroy
     void stop() {
-        sharedFiles.values().forEach(shared -> {
+        listeners.values().forEach(listener -> {
             try {
-                shared.server.close();
+                listener.server.close();
             } catch (IOException e) {
                 log.debug("Error closing seeder socket", e);
             }
@@ -119,23 +158,32 @@ public class SeederService {
         workers.shutdownNow();
     }
 
-    private void acceptClients(SharedFile shared) {
-        while (!shared.server.isClosed()) {
+    private void acceptClients(PortListener listener) {
+        while (!listener.server.isClosed()) {
             try {
-                Socket client = shared.server.accept();
-                workers.submit(() -> serveChunkRequest(client, shared));
+                Socket client = listener.server.accept();
+                workers.submit(() -> serveChunkRequest(client, listener));
             } catch (IOException e) {
-                if (!shared.server.isClosed()) {
-                    log.warn("Seeder accept failed on port {}", shared.info.peerPort(), e);
+                if (!listener.server.isClosed()) {
+                    log.warn("Seeder accept failed on port {}", listener.port, e);
                 }
             }
         }
     }
 
-    private void serveChunkRequest(Socket socket, SharedFile shared) {
+    // Request format: 32-byte SHA-256 of the file, then an int chunk number
+    // (-1 asks for the total chunk count). Unknown hashes are dropped without a reply.
+    private void serveChunkRequest(Socket socket, PortListener listener) {
         try (socket;
              DataInputStream input = new DataInputStream(socket.getInputStream());
              DataOutputStream output = new DataOutputStream(socket.getOutputStream())) {
+            socket.setSoTimeout(REQUEST_TIMEOUT_MS);
+            byte[] hashBytes = new byte[HASH_BYTES];
+            input.readFully(hashBytes);
+            SharedFile shared = listener.files.get(HexFormat.of().formatHex(hashBytes));
+            if (shared == null) {
+                return;
+            }
             int chunkNumber = input.readInt();
             if (chunkNumber == -1) {
                 output.writeInt(shared.totalChunks);
@@ -148,15 +196,14 @@ public class SeederService {
             long offset = (long) chunkNumber * chunkSize;
             int length = (int) Math.min(chunkSize, shared.fileSize - offset);
             byte[] buffer = new byte[length];
-            try (RandomAccessFile file = new RandomAccessFile(shared.file.toFile(), "r")) {
-                file.seek(offset);
-                file.readFully(buffer);
+            try (RandomAccessFile raf = new RandomAccessFile(shared.file.toFile(), "r")) {
+                raf.seek(offset);
+                raf.readFully(buffer);
             }
             output.write(buffer);
             output.flush();
         } catch (IOException e) {
-            log.debug("Failed to serve chunk from {}:{}", shared.peerIp,
-                    shared.info.peerPort(), e);
+            log.debug("Failed to serve a chunk request on port {}", listener.port, e);
         }
     }
 
@@ -194,11 +241,21 @@ public class SeederService {
             Path file,
             long fileSize,
             int totalChunks,
-            ServerSocket server,
             String trackerHost,
             int trackerPort,
             String peerIp,
             String fileHash,
             SharingInfo info) {
+    }
+
+    private static final class PortListener {
+        final int port;
+        final ServerSocket server;
+        final Map<String, SharedFile> files = new ConcurrentHashMap<>();
+
+        PortListener(int port, ServerSocket server) {
+            this.port = port;
+            this.server = server;
+        }
     }
 }

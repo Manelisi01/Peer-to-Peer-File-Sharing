@@ -17,8 +17,11 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
@@ -77,12 +80,27 @@ public class DownloadService {
                 : resolveStoragePath(TEMP_DIR + "/" + job.getId() + "/" + displayName);
         downloadPaths.put(job.getId(), destination);
         jobs.put(job.getId(), job);
-        jobExecutor.submit(() -> runDownload(job, destination, request));
+        job.attach(jobExecutor.submit(() -> runDownload(job, destination, request)));
         return job;
     }
 
     public DownloadJob getJob(String id) {
         return jobs.get(id);
+    }
+
+    /** Cancels a running download. Returns the job (check its status), or null if unknown. */
+    public DownloadJob cancelDownload(String id) {
+        DownloadJob job = jobs.get(id);
+        if (job != null && job.cancel("Download cancelled.")) {
+            log.info("Download job {} cancelled by user", id);
+        }
+        return job;
+    }
+
+    private static void throwIfCancelled(DownloadJob job) {
+        if (job.isCancelled()) {
+            throw new CancellationException("Download cancelled.");
+        }
     }
 
     /** Path of a finished download, or null if the job is unknown, unfinished or the file is gone. */
@@ -190,20 +208,23 @@ public class DownloadService {
     private void runDownload(DownloadJob job, Path destination, DownloadRequest request) {
         Path temporaryFile = null;
         try {
+            throwIfCancelled(job);
             job.update("DISCOVERING", "Querying tracker for seeders.");
             List<InetSocketAddress> seeders = trackerService.query(
                     request.fileHash(), request.trackerHost(), request.trackerPort());
+            throwIfCancelled(job);
             if (seeders.isEmpty()) {
                 throw new IOException("No seeders found for this file hash.");
             }
 
-            int totalChunks = getTotalChunks(seeders.get(0));
+            int totalChunks = getTotalChunks(seeders, request.fileHash());
             Path parent = destination.getParent();
             Files.createDirectories(parent);
             temporaryFile = Files.createTempFile(parent, "p2p-download-", ".part");
 
             job.update("DOWNLOADING", "Downloading from " + seeders.size() + " seeder(s).");
-            downloadChunks(seeders, totalChunks, temporaryFile, job);
+            downloadChunks(seeders, totalChunks, temporaryFile, job, request.fileHash());
+            throwIfCancelled(job);
 
             job.update("VERIFYING", "Checking the completed file hash.");
             String actualHash = FileHasher.calculateSha256(temporaryFile);
@@ -211,6 +232,9 @@ public class DownloadService {
                 throw new IOException("SHA-256 verification failed.");
             }
 
+            if (!job.beginFinalize()) {
+                throw new CancellationException("Download cancelled.");
+            }
             try {
                 Files.move(temporaryFile, destination, StandardCopyOption.REPLACE_EXISTING,
                         StandardCopyOption.ATOMIC_MOVE);
@@ -237,8 +261,12 @@ public class DownloadService {
             job.setProgress(100);
             job.update("COMPLETED", message);
         } catch (Exception e) {
-            log.warn("Download job {} failed", job.getId(), e);
-            job.update("FAILED", e.getMessage() == null ? "Download failed." : e.getMessage());
+            if (job.isCancelled()) {
+                log.info("Download job {} stopped after cancellation", job.getId());
+            } else {
+                log.warn("Download job {} failed", job.getId(), e);
+                job.update("FAILED", e.getMessage() == null ? "Download failed." : e.getMessage());
+            }
         } finally {
             if (temporaryFile != null) {
                 try {
@@ -247,6 +275,10 @@ public class DownloadService {
                     log.warn("Could not remove temporary download file {}", temporaryFile, e);
                 }
             }
+            if (job.isCancelled()) {
+                // Removes the job's temporary folder (no-op when downloads are kept).
+                discardDownload(job.getId(), "Download cancelled.");
+            }
         }
     }
 
@@ -254,7 +286,8 @@ public class DownloadService {
             List<InetSocketAddress> seeders,
             int totalChunks,
             Path temporaryFile,
-            DownloadJob job) throws Exception {
+            DownloadJob job,
+            String fileHash) throws Exception {
         if (totalChunks == 0) {
             return;
         }
@@ -263,6 +296,7 @@ public class DownloadService {
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         ExecutorCompletionService<ChunkResult> completion =
                 new ExecutorCompletionService<>(executor);
+        byte[] hash = hashBytes(fileHash);
 
         try (RandomAccessFile output = new RandomAccessFile(temporaryFile.toFile(), "rw")) {
             output.setLength((long) totalChunks * chunkSize);
@@ -271,7 +305,7 @@ public class DownloadService {
             int lastChunkLength = -1;
 
             while (nextChunk < threadCount) {
-                submitChunk(completion, seeders, nextChunk++);
+                submitChunk(completion, seeders, hash, nextChunk++);
             }
 
             while (completed < totalChunks) {
@@ -289,7 +323,7 @@ public class DownloadService {
                 completed++;
                 job.setProgress((int) (completed * 100.0 / totalChunks));
                 if (nextChunk < totalChunks) {
-                    submitChunk(completion, seeders, nextChunk++);
+                    submitChunk(completion, seeders, hash, nextChunk++);
                 }
             }
 
@@ -305,13 +339,14 @@ public class DownloadService {
     private void submitChunk(
             ExecutorCompletionService<ChunkResult> completion,
             List<InetSocketAddress> seeders,
+            byte[] hash,
             int chunkNumber) {
         completion.submit(() -> {
             IOException lastError = null;
             for (int attempt = 0; attempt < seeders.size(); attempt++) {
                 InetSocketAddress seeder = seeders.get((chunkNumber + attempt) % seeders.size());
                 try {
-                    return new ChunkResult(chunkNumber, downloadChunk(seeder, chunkNumber));
+                    return new ChunkResult(chunkNumber, downloadChunk(seeder, hash, chunkNumber));
                 } catch (IOException e) {
                     lastError = e;
                 }
@@ -321,12 +356,31 @@ public class DownloadService {
         });
     }
 
-    private int getTotalChunks(InetSocketAddress seeder) throws IOException {
+    // Asks seeders in turn until one reports the chunk count for this file.
+    private int getTotalChunks(List<InetSocketAddress> seeders, String fileHash) throws IOException {
+        byte[] hash = hashBytes(fileHash);
+        IOException lastError = null;
+        for (InetSocketAddress seeder : seeders) {
+            try {
+                return getTotalChunks(seeder, hash);
+            } catch (IOException e) {
+                lastError = e;
+            }
+        }
+        throw new IOException("No seeder could provide this file.", lastError);
+    }
+
+    private static byte[] hashBytes(String fileHash) {
+        return HexFormat.of().parseHex(fileHash.toLowerCase(Locale.ROOT));
+    }
+
+    private int getTotalChunks(InetSocketAddress seeder, byte[] hash) throws IOException {
         try (Socket socket = new Socket()) {
             socket.connect(seeder, SOCKET_TIMEOUT_MS);
             socket.setSoTimeout(SOCKET_TIMEOUT_MS);
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
             DataInputStream input = new DataInputStream(socket.getInputStream());
+            output.write(hash);
             output.writeInt(-1);
             output.flush();
             int totalChunks = input.readInt();
@@ -339,11 +393,13 @@ public class DownloadService {
         }
     }
 
-    private byte[] downloadChunk(InetSocketAddress seeder, int chunkNumber) throws IOException {
+    private byte[] downloadChunk(InetSocketAddress seeder, byte[] hash, int chunkNumber)
+            throws IOException {
         try (Socket socket = new Socket()) {
             socket.connect(seeder, SOCKET_TIMEOUT_MS);
             socket.setSoTimeout(SOCKET_TIMEOUT_MS);
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+            output.write(hash);
             output.writeInt(chunkNumber);
             output.flush();
 

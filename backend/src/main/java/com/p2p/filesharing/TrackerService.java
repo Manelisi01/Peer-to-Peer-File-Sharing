@@ -167,12 +167,10 @@ public class TrackerService {
         String hash = validateHash(parts[1]);
         String ip = validateIp(parts[2]);
         int port = validatePort(parts[3]);
-        String key = ip + ":" + port;
-        PeerInfo current = peers.get(key);
-        if ("UPDATE".equals(parts[0])) {
-            if (current == null || !current.fileHash.equals(hash)) {
-                return;
-            }
+        // One address can seed many files, so the entry is keyed by hash as well.
+        String key = peerKey(hash, ip, port);
+        if ("UPDATE".equals(parts[0]) && !peers.containsKey(key)) {
+            return;
         }
         peers.put(key, new PeerInfo(ip, port, hash, System.currentTimeMillis()));
     }
@@ -184,8 +182,11 @@ public class TrackerService {
         String hash = validateHash(parts[1]);
         String ip = validateIp(parts[2]);
         int port = validatePort(parts[3]);
-        String key = ip + ":" + port;
-        peers.computeIfPresent(key, (peerKey, peer) -> peer.fileHash.equals(hash) ? null : peer);
+        peers.remove(peerKey(hash, ip, port));
+    }
+
+    private static String peerKey(String hash, String ip, int port) {
+        return hash + "|" + ip + ":" + port;
     }
 
     @Scheduled(fixedDelayString = "${p2p.tracker.cleanup-interval-ms:5000}")
