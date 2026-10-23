@@ -14,6 +14,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +37,11 @@ public class SeederService {
 
     @Value("${p2p.chunk-size:524288}")
     private int chunkSize;
+
+    // Files inside this folder are copies the app manages itself; anything else is shared
+    // in place from wherever the user keeps it and must never be deleted by the app.
+    @Value("${p2p.storage-dir:./data}")
+    private String storageDirectory = "./data";
 
     // One TCP listener per port. Any number of files can be shared on the same port:
     // every request starts with the file's SHA-256, which selects the file to serve.
@@ -91,8 +97,10 @@ public class SeederService {
             workers.submit(() -> acceptClients(started));
         }
 
+        boolean managed = normalizedFile.startsWith(
+                Paths.get(storageDirectory).toAbsolutePath().normalize());
         SharingInfo info = new SharingInfo(normalizedFile.getFileName().toString(), hash,
-                peerIp, peerPort, fileSize, (int) count);
+                peerIp, peerPort, fileSize, (int) count, managed);
         SharedFile shared = new SharedFile(normalizedFile, fileSize, (int) count,
                 trackerHost, trackerPort, peerIp, hash, info);
         listener.files.put(hash, shared);
@@ -122,6 +130,20 @@ public class SeederService {
                 }
             }
         }
+    }
+
+    /** Stops sharing a file by its SHA-256 without touching the file. Returns how many shares ended. */
+    public synchronized int stopSharingByHash(String fileHash) {
+        String hash = fileHash.toLowerCase(Locale.ROOT);
+        int stopped = 0;
+        for (PortListener listener : List.copyOf(listeners.values())) {
+            SharedFile shared = listener.files.get(hash);
+            if (shared != null) {
+                removeShared(listener, shared);
+                stopped++;
+            }
+        }
+        return stopped;
     }
 
     // Must be called with the service lock held. Closes the port once its last file is gone.
@@ -234,7 +256,8 @@ public class SeederService {
             String peerIp,
             int peerPort,
             long fileSize,
-            int totalChunks) {
+            int totalChunks,
+            boolean managed) {
     }
 
     private record SharedFile(

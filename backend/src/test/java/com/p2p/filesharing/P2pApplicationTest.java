@@ -42,6 +42,14 @@ class P2pApplicationTest {
     }
 
     @Test
+    void sharingByPathIsDisabledOutsideTheDesktopApp() {
+        ResponseEntity<Map> response = restTemplate.postForEntity(
+                "/api/files/local", Map.of("path", "/tmp/anything"), Map.class);
+
+        assertEquals(403, response.getStatusCode().value());
+    }
+
+    @Test
     void uploadsFileAndReturnsItsSha256() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);

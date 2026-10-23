@@ -26,7 +26,7 @@ export default function App() {
   const peerSearch = usePeerSearch({ notify });
 
   async function handleUpload(fileList) {
-    const uploaded = await library.uploadFiles(fileList);
+    const uploaded = await library.addFiles(fileList);
     if (uploaded?.length === 1) peerSearch.setHashInput(uploaded[0].fileHash);
   }
 
@@ -88,7 +88,7 @@ export default function App() {
           />
         </div>
 
-        <ActivityPanel jobs={downloads.jobs} onClear={handleClearHistory} />
+        <ActivityPanel jobs={downloads.jobs} onClear={handleClearHistory} onCancel={downloads.cancel} />
         <PageFooter />
       </main>
 

@@ -1,4 +1,4 @@
-import { Copy, LoaderCircle, Radio, Search, Trash2 } from 'lucide-react';
+import { Copy, LoaderCircle, Radio, Search, Trash2, X } from 'lucide-react';
 import { fileIcon } from '../utils/fileIcon';
 import { formatSize, shortHash } from '../utils/format';
 
@@ -6,6 +6,11 @@ export default function FileRow({ file, busy, onSeed, onUseHash, onDelete, onCop
   const Icon = fileIcon(file.fileName);
   const seeding = busy === `seed-${file.fileName}`;
   const deleting = busy === `delete-${file.fileName}`;
+  // Files shared from their own location are never deleted by the app, only un-shared.
+  const sharedInPlace = file.managed === false;
+  const removeLabel = sharedInPlace
+    ? `Stop sharing ${file.fileName} (the file itself is kept)`
+    : `Delete ${file.fileName} from storage`;
 
   return (
     <article className="file-row">
@@ -26,8 +31,8 @@ export default function FileRow({ file, busy, onSeed, onUseHash, onDelete, onCop
           </button>
         )}
         <button className="row-more" onClick={() => onUseHash(file)} title="Use hash for peer lookup" aria-label={`Use ${file.fileName} hash`}><Search size={15} /></button>
-        <button className="row-delete" onClick={() => onDelete(file)} disabled={deleting} title={`Delete ${file.fileName} from storage`} aria-label={`Delete ${file.fileName}`}>
-          {deleting ? <LoaderCircle className="spin" size={14} /> : <Trash2 size={14} />}
+        <button className="row-delete" onClick={() => onDelete(file)} disabled={deleting} title={removeLabel} aria-label={removeLabel}>
+          {deleting ? <LoaderCircle className="spin" size={14} /> : sharedInPlace ? <X size={14} /> : <Trash2 size={14} />}
         </button>
       </div>
     </article>

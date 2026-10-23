@@ -1,0 +1,36 @@
+{
+  "name": "openwire-desktop",
+  "productName": "Openwire",
+  "version": "1.0.0",
+  "description": "Openwire - peer-to-peer file sharing",
+  "author": "Openwire",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:backend": "node scripts/build-backend.mjs",
+    "build:runtime": "node scripts/build-runtime.mjs",
+    "icons": "electron scripts/render-icon.cjs",
+    "pack": "npm run build:backend && npm run build:runtime && electron-builder --dir",
+    "dist": "npm run build:backend && npm run build:runtime && electron-builder"
+  },
+  "build": {
+    "appId": "com.p2p.openwire",
+    "productName": "Openwire",
+    "directories": { "output": "dist", "buildResources": "assets" },
+    "files": ["main.js", "preload.js", "loading.html"],
+    "extraResources": [
+      { "from": "build/runtime", "to": "runtime" },
+      { "from": "build/backend.jar", "to": "backend.jar" },
+      { "from": "assets/icon.png", "to": "icon.png" }
+    ],
+    "win": { "target": "nsis", "icon": "assets/icon.ico" },
+    "mac": { "target": "dmg", "category": "public.app-category.utilities", "icon": "assets/icon.png" },
+    "linux": { "target": "AppImage", "category": "Network", "icon": "assets/icon.png" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.15.3"
+  }
+}

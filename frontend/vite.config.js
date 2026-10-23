@@ -3,7 +3,8 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const backend = env.BACKEND_URL || 'http://localhost:8080';
+  // The backend listens on 127.0.0.1 only. Override with:  BACKEND_URL=http://127.0.0.1:9000 npm run dev
+  const backend = env.BACKEND_URL || 'http://127.0.0.1:8080';
 
   return {
     plugins: [react()],

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+  <title>Openwire</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { display: grid; place-items: center; background: #f3f5f1; color: #1d2520;
+           font: 15px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .box { text-align: center; }
+    .brand { font-size: 28px; font-weight: 700; letter-spacing: -.5px; }
+    .dot { color: #2f9e6b; }
+    .spin { width: 22px; height: 22px; margin: 22px auto 14px; border-radius: 50%;
+            border: 3px solid #cdd6cf; border-top-color: #2f9e6b; animation: s 0.9s linear infinite; }
+    @keyframes s { to { transform: rotate(360deg); } }
+    small { color: #6b766e; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="brand">openwire<span class="dot">.</span></div>
+    <div class="spin"></div>
+    <small>Starting your node...</small>
+  </div>
+</body>
+</html>

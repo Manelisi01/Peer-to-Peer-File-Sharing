@@ -1,100 +1,239 @@
-P2P File Sharing with Spring Boot
-=================================
+# Openwire: peer-to-peer file sharing
 
-This application exposes the P2P file-sharing system through a Spring Boot REST API. The embedded tracker speaks the existing UDP protocol on port 5000, and seeders continue to serve chunks over TCP using the existing wire protocol.
+Share files directly between computers. There is no central file server: a small **tracker**
+only records which peers have which file, and the file itself travels straight from peer to
+peer. Files are identified by their **SHA-256 hash**, which you give to the person you want to
+share with (copy it and send it however you like). Every download is verified against that
+hash.
 
-Requirements
-------------
+The project has three parts that you can use together or separately:
+
+| Folder | What it is |
+|---|---|
+| `backend/` | Spring Boot app: REST API, embedded UDP tracker, TCP seeder, downloader |
+| `frontend/` | React (Vite) web interface |
+| `desktop/` | Electron wrapper that turns the above into a double-click Windows/macOS/Linux app |
+
+## How it works
+
+- **Tracker (UDP, port 5000).** Seeders register `hash -> ip:port` and send a heartbeat every
+  30 seconds. Entries expire after 60 seconds without one. Downloaders ask the tracker who has
+  a hash.
+- **Seeder (TCP).** One TCP port can serve any number of files. Each request starts with the
+  32-byte SHA-256 of the file it wants, followed by a chunk number (`-1` asks for the chunk
+  count). A seeder ignores requests for hashes it does not share.
+- **Downloader.** Asks the tracker for peers, then fetches chunks in parallel (up to 8 at a
+  time) from all of them, falls back to another seeder if one fails, and verifies the final
+  SHA-256 before finishing.
+
+## Requirements
 
 - Java 17 or newer
 - Maven 3.6 or newer
 - Node.js 22 or newer and npm
+- To build installers: a full **JDK** 17+ (not just a JRE). See [desktop/README.md](desktop/README.md).
 
-Run the application from this directory:
+## Quick start (development)
 
-	mvn spring-boot:run
+Start the backend first and wait until it is up (about 15 seconds), then the frontend.
 
-The REST API listens on `http://127.0.0.1:8080`. Files are read from and written to `./data` by default. Override the storage directory with `--p2p.storage-dir=/path/to/data`.
+**Option A: one command** (Linux, macOS or WSL; run from the project root):
 
-React interface
----------------
+```bash
+./run.sh              # backend + frontend, Ctrl+C stops both
+./run.sh backend      # only the backend
+./run.sh frontend     # only the frontend
+```
 
-Start the Spring Boot API first, then run the React development server in a second terminal:
+**Option B: two terminals**
 
-	cd frontend
-	npm install
-	npm run dev
+```bash
+# terminal 1
+cd backend
+mvn spring-boot:run
 
-Open `http://127.0.0.1:5173`. The development server proxies API requests to Spring Boot on port 8080. The interface can upload files into the configured storage directory, seed them, search for peers by SHA-256, and track download progress.
+# terminal 2
+cd frontend
+npm install
+npm run dev
+```
 
-To include the UI in the Spring Boot application jar:
+Open `http://127.0.0.1:5173`. The dev server proxies `/api` to the backend on port 8080.
+Use `BACKEND_URL=http://127.0.0.1:9000 npm run dev` if the backend runs on another port.
 
-	cd frontend
-	npm install
-	npm run build
-	cd ..
-	mvn package
+To serve the UI from the backend itself (no Vite needed):
 
-The Vite build writes static assets to `src/main/resources/static`; Spring Boot then serves the interface from `http://127.0.0.1:8080`.
+```bash
+cd frontend && npm run build        # writes the UI into backend/src/main/resources/static
+cd ../backend && mvn package
+java -jar target/peer-to-peer-file-sharing-1.0.0.jar
+```
 
-API
----
+Then open `http://127.0.0.1:8080`.
 
-Check application status:
+## Desktop app
 
-	curl http://127.0.0.1:8080/api/status
+The desktop app is a normal window (no browser, no command line for users). It starts its own
+private backend on a free port, shares files from where they are on disk (nothing is copied),
+and stops the backend when it closes.
 
-Place a file inside the storage directory, then calculate its SHA-256 hash:
+```powershell
+cd desktop
+npm install
+npm run build:backend     # builds the UI and the backend jar
+npm start                 # opens the window
+npm run dist              # builds the installer into desktop/dist/
+```
 
-	curl "http://127.0.0.1:8080/api/files/hash?fileName=sample.iso"
+Build each installer on its own operating system (use **Windows PowerShell**, not WSL, for the
+Windows `.exe`). Full instructions, troubleshooting and log locations are in
+[desktop/README.md](desktop/README.md).
 
-The React interface uploads files using `POST /api/files` as multipart form data and receives the file name, size, and SHA-256 hash.
+## Using the app
 
-Use the trash action in the shared library to stop seeding and delete a file from the configured storage directory. Completed and failed transfer entries can be cleared from the activity history; active downloads remain visible.
+1. **Add a file.** Drop it on the page. Its SHA-256 appears next to it.
+2. **Check your network settings** (the node settings drawer): your **peer IP** must be an
+   address other peers can reach, your **peer port** must be open to them, and everyone must use
+   the same **tracker host and port**.
+3. **Start seeding.** The file is now listed with the tracker.
+4. **Send the hash** to the person you want to share with, by any private channel.
+5. **They paste the hash**, search for peers, and start the download. Progress is shown in the
+   activity panel and a download can be cancelled while it is running.
 
-Start sharing a file. The peer TCP port must be reachable by other peers:
+In the library, the action next to a file depends on how it was added. In the desktop app it is
+**Stop sharing** and your original file is never touched. Files uploaded into the storage folder
+(browser mode) show a **delete** action that also removes the stored copy.
 
-	curl -X POST http://127.0.0.1:8080/api/seeders \
-	  -H "Content-Type: application/json" \
-	  -d '{"fileName":"sample.iso","peerIp":"127.0.0.1","peerPort":6000,"trackerHost":"127.0.0.1","trackerPort":5000}'
+## API
 
-Find active seeders for a hash:
+All endpoints are under `http://127.0.0.1:8080/api`.
 
-	curl "http://127.0.0.1:8080/api/peers?hash=SHA256_HASH"
+Status and hashing:
 
-List files this node is currently seeding:
+```bash
+curl http://127.0.0.1:8080/api/status
+curl "http://127.0.0.1:8080/api/files/hash?fileName=sample.iso"     # file inside the storage folder
+```
 
-	curl http://127.0.0.1:8080/api/seeders
+Upload a file into the storage folder (multipart form data; returns name, size and hash):
 
-Stop seeding and delete a file from local storage:
+```bash
+curl -F "file=@sample.iso" http://127.0.0.1:8080/api/files
+```
 
-	curl -X DELETE "http://127.0.0.1:8080/api/files?fileName=sample.iso"
+Start sharing a stored file. The peer TCP port must be reachable by other peers. Any number of
+files can share the same port:
 
-Start a download. The response is HTTP 202 and contains a job ID; the completed file is stored under the configured storage directory. The app verifies the SHA-256 hash and then attempts to seed the downloaded file on the supplied peer port.
+```bash
+curl -X POST http://127.0.0.1:8080/api/seeders \
+  -H "Content-Type: application/json" \
+  -d '{"fileName":"sample.iso","peerIp":"127.0.0.1","peerPort":6000,"trackerHost":"127.0.0.1","trackerPort":5000}'
+```
 
-	curl -X POST http://127.0.0.1:8080/api/downloads \
-	  -H "Content-Type: application/json" \
-	  -d '{"targetFile":"copy.iso","fileHash":"SHA256_HASH","trackerHost":"127.0.0.1","trackerPort":5000,"peerIp":"127.0.0.1","peerPort":7000}'
+List what this node is seeding, and find seeders for a hash:
 
-Poll the returned ID for status and progress:
+```bash
+curl http://127.0.0.1:8080/api/seeders
+curl "http://127.0.0.1:8080/api/peers?hash=SHA256_HASH"
+```
 
-	curl http://127.0.0.1:8080/api/downloads/JOB_ID
+Stop sharing:
 
-Configuration
--------------
+```bash
+curl -X DELETE "http://127.0.0.1:8080/api/seeders?hash=SHA256_HASH"    # stop only; the file is kept
+curl -X DELETE "http://127.0.0.1:8080/api/files?fileName=sample.iso"   # stop and delete the stored file
+```
 
-Important properties can be set in `src/main/resources/application.properties` or passed as command-line arguments:
+Download. The response is HTTP 202 with a job ID:
 
-- `server.port` (default `8080`): REST API port.
-- `p2p.storage-dir` (default `./data`): allowed file storage root.
-- `p2p.tracker.enabled` (default `true`): run the embedded UDP tracker. Set to `false` on peer nodes that use a separate tracker.
-- `p2p.tracker.udp-port` (default `5000`): embedded tracker UDP port.
-- `p2p.chunk-size` (default `524288`): chunk size; must match other peers.
+```bash
+curl -X POST http://127.0.0.1:8080/api/downloads \
+  -H "Content-Type: application/json" \
+  -d '{"targetFile":"copy.iso","fileHash":"SHA256_HASH","trackerHost":"127.0.0.1","trackerPort":5000,"peerIp":"127.0.0.1","peerPort":7000}'
 
-Use one embedded tracker per tracker host. On peer hosts that should not run a tracker, start with `--p2p.tracker.enabled=false` and point requests to the tracker host. Make sure the REST API port and peer TCP ports are reachable as appropriate for your network.
+curl http://127.0.0.1:8080/api/downloads/JOB_ID                  # status and progress
+curl -X POST http://127.0.0.1:8080/api/downloads/JOB_ID/cancel   # cancel a running download
+curl -OJ http://127.0.0.1:8080/api/downloads/JOB_ID/file         # fetch a completed file
+```
 
-Build and test
---------------
+With `p2p.keep-downloads=false` (the default) a finished download is a temporary copy that you
+fetch from `/file` and that is deleted after `p2p.download-ttl-minutes`. With `true`, the file
+is kept in the storage folder and the node starts seeding it on `peerPort`.
 
-	mvn test
-	mvn package
+Desktop app only (these return 403 unless the app has started the backend with its API token):
+
+```
+POST /api/files/local      {"path": "/absolute/path"}   hash a file where it is
+POST /api/seeders/local    {"path": ..., "peerIp": ..., "peerPort": ..., "trackerHost": ..., "trackerPort": ...}
+```
+
+## Configuration
+
+Set these in `backend/src/main/resources/application.properties` or pass them as
+`--property=value` arguments.
+
+| Property | Default | Meaning |
+|---|---|---|
+| `server.port` | `8080` | REST API and UI port |
+| `server.address` | `127.0.0.1` | Interface the API listens on. Keep it on loopback unless you add your own protection |
+| `server.error.include-message` | `always` | Show the real reason in API errors |
+| `p2p.storage-dir` | `./data` | Folder for uploaded and kept files |
+| `p2p.keep-downloads` | `false` | Keep finished downloads and seed them (see above) |
+| `p2p.download-ttl-minutes` | `30` | Minutes a temporary download stays available. Must be a plain number |
+| `p2p.chunk-size` | `524288` | Chunk size in bytes. **Must be the same on every peer** |
+| `p2p.tracker.enabled` | `true` | Run the embedded UDP tracker |
+| `p2p.tracker.udp-port` | `5000` | Tracker UDP port |
+| `p2p.tracker.peer-timeout-ms` | `60000` | Drop a peer after this long without a heartbeat |
+| `p2p.tracker.cleanup-interval-ms` | `5000` | How often expired peers are removed |
+| `p2p.tracker.heartbeat-ms` | `30000` | How often a seeder re-announces itself |
+| `p2p.api-token` | empty | Desktop app: shared secret the window must send as `X-P2P-Token` on every `/api` request |
+| `p2p.allow-path-sharing` | `false` | Desktop app: share files by path. Only works if `p2p.api-token` is also set |
+| `p2p.exit-on-stdin-close` | `false` | Desktop app: exit when the app that started the backend goes away |
+
+Use one tracker per group of peers. Peers that should use someone else's tracker can start with
+`--p2p.tracker.enabled=false` and enter that tracker's address in the settings.
+
+## Security notes
+
+- The API listens on `127.0.0.1` only, so other computers cannot call it. Peers connect to the
+  seeding TCP port, which is separate.
+- In the desktop app the API additionally requires a random per-launch token that only the
+  app's own window knows, so other programs and web pages on the same computer cannot use it.
+  This matters because sharing by path can otherwise point at any readable file.
+- Transfers are **not encrypted**. The SHA-256 check protects integrity, not privacy.
+
+## Troubleshooting
+
+- **`ECONNREFUSED 127.0.0.1:8080` from Vite.** The backend is not up yet. Wait for
+  `Started P2pApplication` in the backend log, or use `./run.sh`, which waits for you.
+- **Backend stops at startup with a "Failed to convert value ... long" error.** A numeric
+  property has stray characters, for example `p2p.download-ttl-minutes=30S`. It must be `30`.
+- **`Cannot find module @rollup/rollup-...` or `ENOTEMPTY` during `npm install`.**
+  `node_modules` was installed by a different operating system than the one running it (for
+  example installed in Windows PowerShell and run in WSL). Delete `node_modules` and install
+  again from the terminal you will actually use. Do not mix the two for one project.
+- **PowerShell: "running scripts is disabled".** Run
+  `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`, or type `npm.cmd`
+  instead of `npm`.
+- **`mvn` is not recognized.** Install Maven and set `JAVA_HOME`. Programs started before you
+  changed environment variables (including VS Code's terminal) must be restarted to see them.
+- **Peers cannot connect.** Allow the app through the firewall when Windows asks, and make sure
+  your peer IP and port are reachable by the other person.
+
+## Known limitations
+
+- **Peers must be reachable.** Across different home networks the seeder's TCP port normally
+  has to be forwarded on its router. There is no NAT traversal yet.
+- **Peers enter their own IP.** The tracker records the IP a peer reports about itself and does
+  not verify it.
+- **The list of shared files is not saved.** After a restart, add and seed your files again.
+- **All peers need the same version.** The chunk request format includes the file hash, so older
+  builds cannot talk to newer ones, and `p2p.chunk-size` must match everywhere.
+
+## Build and test
+
+```bash
+cd backend
+mvn test
+mvn package
+```
