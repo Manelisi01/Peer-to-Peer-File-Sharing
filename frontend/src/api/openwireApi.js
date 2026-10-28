@@ -39,7 +39,7 @@ export const openwireApi = {
       trackerPort: Number(net.trackerPort),
     }),
 
-  findPeers: (hash) => request(`/api/peers?hash=${encodeURIComponent(hash)}`),
+  findPeers: (hash, net) => request(`/api/peers?hash=${encodeURIComponent(hash)}&trackerHost=${encodeURIComponent(net.trackerHost)}&trackerPort=${encodeURIComponent(net.trackerPort)}`),
 
   startDownload: ({ targetFile, fileHash }, net) =>
     jsonPost('/api/downloads', {

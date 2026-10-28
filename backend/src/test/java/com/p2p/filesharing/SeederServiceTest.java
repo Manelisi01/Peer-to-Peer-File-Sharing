@@ -36,8 +36,8 @@ class SeederServiceTest {
         Path a = write("a.bin", dataA);
         Path b = write("b.bin", dataB);
 
-        SeederService.SharingInfo infoA = seeder.startSharing(a, "127.0.0.1", port, "127.0.0.1", 9);
-        SeederService.SharingInfo infoB = seeder.startSharing(b, "127.0.0.1", port, "127.0.0.1", 9);
+        SharingInfo infoA = seeder.startSharing(a, "127.0.0.1", port, "127.0.0.1", 9);
+        SharingInfo infoB = seeder.startSharing(b, "127.0.0.1", port, "127.0.0.1", 9);
 
         assertEquals(2, seeder.getSharedFileCount());
         assertEquals(3, requestChunkCount(port, infoA.fileHash()));
@@ -74,7 +74,7 @@ class SeederServiceTest {
         Path original = write("a.bin", data);
         Path copy = write("copy.bin", data);
 
-        SeederService.SharingInfo first = seeder.startSharing(original, "127.0.0.1", port, "127.0.0.1", 9);
+        SharingInfo first = seeder.startSharing(original, "127.0.0.1", port, "127.0.0.1", 9);
         assertEquals(first, seeder.startSharing(original, "127.0.0.1", port, "127.0.0.1", 9));
         assertThrows(IllegalArgumentException.class,
                 () -> seeder.startSharing(copy, "127.0.0.1", port, "127.0.0.1", 9));
@@ -91,7 +91,7 @@ class SeederServiceTest {
         Path a = write("a.bin", randomBytes(1500, 5));
         Path b = write("b.bin", dataB);
         seeder.startSharing(a, "127.0.0.1", port, "127.0.0.1", 9);
-        SeederService.SharingInfo infoB = seeder.startSharing(b, "127.0.0.1", port, "127.0.0.1", 9);
+        SharingInfo infoB = seeder.startSharing(b, "127.0.0.1", port, "127.0.0.1", 9);
 
         seeder.stopSharing(a);
         assertEquals(1, seeder.getSharedFileCount());
@@ -109,11 +109,11 @@ class SeederServiceTest {
         SeederService seeder = newSeeder();
         int port = freePort();
         Path file = write("a.bin", randomBytes(1500, 7));
-        SeederService.SharingInfo oldInfo = seeder.startSharing(file, "127.0.0.1", port, "127.0.0.1", 9);
+        SharingInfo oldInfo = seeder.startSharing(file, "127.0.0.1", port, "127.0.0.1", 9);
 
         byte[] newData = randomBytes(900, 8);
         Files.write(file, newData);
-        SeederService.SharingInfo newInfo = seeder.startSharing(file, "127.0.0.1", port, "127.0.0.1", 9);
+        SharingInfo newInfo = seeder.startSharing(file, "127.0.0.1", port, "127.0.0.1", 9);
 
         assertEquals(1, seeder.getSharedFileCount());
         assertArrayEquals(slice(newData, 0), requestChunk(port, newInfo.fileHash(), 0));
@@ -150,7 +150,7 @@ class SeederServiceTest {
         int port = freePort();
         Path a = write("a.bin", randomBytes(300, 11));
         Path b = write("b.bin", randomBytes(300, 12));
-        SeederService.SharingInfo infoA = seeder.startSharing(a, "127.0.0.1", port, "127.0.0.1", 9);
+        SharingInfo infoA = seeder.startSharing(a, "127.0.0.1", port, "127.0.0.1", 9);
         seeder.startSharing(b, "127.0.0.1", port, "127.0.0.1", 9);
 
         assertEquals(1, seeder.stopSharingByHash(infoA.fileHash()));

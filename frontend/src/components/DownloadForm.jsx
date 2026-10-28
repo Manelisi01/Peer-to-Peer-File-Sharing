@@ -19,12 +19,12 @@ export default function DownloadForm({ submitting, onSubmit }) {
 
       <label htmlFor="target-file">SAVE AS</label>
       <div className="input-with-button">
-        <input id="target-file" value={targetFile} onChange={(e) => setTargetFile(e.target.value)} placeholder="filename.ext" />
+        <input id="target-file" value={targetFile} onChange={(e) => setTargetFile(e.target.value)} placeholder="filename.pdf, video.mp4, archive.zip" />
         <button type="submit" className="download-button" disabled={submitting}>
           {submitting ? <LoaderCircle className="spin" size={16} /> : <ArrowDownToLine size={16} />}<span>Download</span>
         </button>
       </div>
-      <p className="form-footnote"><HardDrive size={13} /> Saves to the server's configured storage directory</p>
+      <p className="form-footnote"><HardDrive size={13} /> Files are saved to Downloads. Include the original extension (e.g. .pdf or .mp4) in the name.</p>
     </form>
   );
 }

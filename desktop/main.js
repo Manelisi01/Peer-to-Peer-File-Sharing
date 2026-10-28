@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, dialog, session, shell } = require('electron');
+const { app, BrowserWindow, dialog, session, shell, ipcMain } = require('electron');
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -18,6 +18,8 @@ let backend = null;
 let mainWindow = null;
 let quitting = false;
 let logPath = '';
+let backendOrigin = '';
+
 
 // ---------------------------------------------------------------- backend process
 
@@ -121,6 +123,47 @@ function stopBackend() {
   try { backend.kill(); } catch { /* already gone */ }
 }
 
+// Save completed transfers directly to the receiving computer's Downloads folder.
+// Electron's download manager streams the file; it does not load it into JS memory.
+function installDownloadHandler() {
+  ipcMain.handle('openwire:save-download', async (event, id, suggestedName) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Unauthorized window');
+    if (typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(id)) throw new Error('Invalid download ID');
+    if (typeof suggestedName !== 'string') throw new Error('Invalid filename');
+    const name = path.basename(suggestedName.replace(/[\\/]/g, '_')).replace(/[<>:"|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '');
+    if (!name || name === '.' || name === '..') throw new Error('Invalid filename');
+    const folder = app.getPath('downloads');
+    fs.mkdirSync(folder, { recursive: true });
+    // Keep the complete original extension, including compound suffixes such as .tar.gz.
+    // Insert collision numbers before the suffix rather than after it.
+    const compound = name.match(/^(.*?)(\.(?:tar\.(?:gz|bz2|xz|zst)|[a-zA-Z0-9]+))$/i);
+    const ext = compound ? compound[2] : '';
+    const stem = ext ? name.slice(0, -ext.length) : name;
+    let destination = path.join(folder, name);
+    let index = 1;
+    while (fs.existsSync(destination)) {
+      destination = path.join(folder, `${stem} (${index++})${ext}`);
+    }
+    const url = `${backendOrigin}/api/downloads/${encodeURIComponent(id)}/file`;
+    return new Promise((resolve, reject) => {
+      const ses = session.defaultSession;
+      const timeout = setTimeout(() => { cleanup(); reject(new Error('Download did not start')); }, 15000);
+      const cleanup = () => { clearTimeout(timeout); ses.removeListener('will-download', onDownload); };
+      const onDownload = (_event, item) => {
+        if (item.getURL() !== url) return;
+        cleanup();
+        item.setSavePath(destination);
+        item.once('done', (_event, state) => {
+          if (state === 'completed') resolve(destination);
+          else reject(new Error(`Saving file ${state}`));
+        });
+      };
+      ses.on('will-download', onDownload);
+      mainWindow.webContents.downloadURL(url);
+    });
+  });
+}
+
 // ---------------------------------------------------------------- window
 
 function openExternal(url) {
@@ -199,7 +242,9 @@ async function start() {
     });
 
     const origin = `http://127.0.0.1:${port}`;
+    backendOrigin = origin;
     installRequestHooks(origin);
+    installDownloadHandler();
     if (mainWindow) {
       lockDownNavigation(mainWindow, origin);
       await mainWindow.loadURL(origin);

@@ -84,10 +84,8 @@ public class TrackerService {
 
     public List<InetSocketAddress> query(String fileHash, String trackerHost, int trackerPort)
             throws IOException {
-        if (!enabled) {
-            return List.of();
-        }
-
+        // The local embedded tracker may be disabled or its port occupied.
+        // Remote tracker queries must still work on every node.
         String request = "QUERY|" + validateHash(fileHash);
         byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
         InetAddress trackerAddress = InetAddress.getByName(trackerHost);

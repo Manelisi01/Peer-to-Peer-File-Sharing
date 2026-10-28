@@ -250,15 +250,6 @@ public class SeederService {
         return address.getHostAddress();
     }
 
-    public record SharingInfo(
-            String fileName,
-            String fileHash,
-            String peerIp,
-            int peerPort,
-            long fileSize,
-            int totalChunks,
-            boolean managed) {
-    }
 
     private record SharedFile(
             Path file,

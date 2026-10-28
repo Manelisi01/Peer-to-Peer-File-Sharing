@@ -26,7 +26,7 @@ export default function NodeSettingsDrawer({ network, onChange, onClose }) {
           </label>
         ))}
       </div>
-      <p className="drawer-note"><CircleHelp size={14} /> The peer address and port must be reachable by other nodes.</p>
+      <p className="drawer-note"><CircleHelp size={14} /> Set Tracker host to the Wi-Fi IPv4 address of ONE computer running the tracker, on every PC. Verify Peer IP matches this computer’s Wi-Fi address. Allow inbound UDP 5000 on the tracker and TCP 7000 on seeders.</p>
     </section>
   );
 }

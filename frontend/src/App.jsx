@@ -23,7 +23,7 @@ export default function App() {
   const { network, updateField } = useNetworkSettings();
   const library = useLibrary({ network, notify });
   const downloads = useDownloads({ network, notify });
-  const peerSearch = usePeerSearch({ notify });
+  const peerSearch = usePeerSearch({ notify, network });
 
   async function handleUpload(fileList) {
     const uploaded = await library.addFiles(fileList);

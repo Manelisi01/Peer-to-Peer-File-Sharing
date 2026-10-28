@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { openwireApi } from '../api/openwireApi';
 import { downloadStorage } from '../services/downloadStorage';
 import { isValidSha256 } from '../utils/format';
 import { isActiveJob } from '../utils/jobStatus';
+import { saveCompletedDownload } from '../services/desktop';
 
 export function useDownloads({ network, notify }) {
   const [starting, setStarting] = useState(false);
+  const savingIds = useRef(new Set());
+  const savedIds = useRef(new Set());
   const [jobs, setJobs] = useState(() => downloadStorage.load());
 
   const activeJobs = jobs.filter(isActiveJob);
@@ -27,15 +30,24 @@ export function useDownloads({ network, notify }) {
       const updates = await Promise.all(
         ids.map((id) => openwireApi.getDownload(id).catch(() => null)),
       );
-      commit((current) =>
-        current.map((job) => updates.find((u) => u?.id === job.id) || job),
-      );
+      for (const job of updates) {
+        if (!job || job.status !== 'COMPLETED' || savingIds.current.has(job.id) || savedIds.current.has(job.id)) continue;
+        savingIds.current.add(job.id);
+        saveCompletedDownload(job.id, job.targetFile)
+          .then((destination) => {
+            savedIds.current.add(job.id);
+            notify(`Saved ${job.targetFile} to ${destination}`);
+          })
+          .catch((error) => notify(`Could not save ${job.targetFile}: ${error.message}`, 'error'))
+          .finally(() => savingIds.current.delete(job.id));
+      }
+      commit((current) => current.map((job) => updates.find((u) => u?.id === job.id) || job));
     };
 
     poll();
     const interval = window.setInterval(poll, 1400);
     return () => window.clearInterval(interval);
-  }, [activeJobIds]);
+  }, [activeJobIds, notify]);
 
   const addJob = (job) => commit((current) => [job, ...current.filter((j) => j.id !== job.id)]);
 

@@ -13,3 +13,17 @@ export function localPathOf(file) {
     return '';
   }
 }
+
+export async function saveCompletedDownload(id, fileName) {
+  if (bridge && typeof bridge.saveDownload === 'function') {
+    return bridge.saveDownload(id, fileName);
+  }
+  // Browser version: use the normal browser download mechanism.
+  const anchor = document.createElement('a');
+  anchor.href = `/api/downloads/${encodeURIComponent(id)}/file`;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  return 'browser Downloads folder';
+}

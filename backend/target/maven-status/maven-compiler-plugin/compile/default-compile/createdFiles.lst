@@ -3,6 +3,7 @@ com\p2p\filesharing\SeederService$PortListener.class
 com\p2p\filesharing\DownloadService$ChunkResult.class
 com\p2p\filesharing\P2pApplication.class
 com\p2p\filesharing\SeederService.class
+com\p2p\filesharing\SharingInfo.class
 com\p2p\filesharing\DownloadService$FileInfo.class
 com\p2p\filesharing\ParentWatchdog.class
 com\p2p\filesharing\SeedRequest.class
@@ -11,7 +12,6 @@ com\p2p\filesharing\TrackerService.class
 com\p2p\filesharing\LocalFileRequest.class
 com\p2p\filesharing\P2pController.class
 com\p2p\filesharing\DownloadJob.class
-com\p2p\filesharing\SeederService$SharingInfo.class
 com\p2p\filesharing\DownloadService.class
 com\p2p\filesharing\SeederService$SharedFile.class
 com\p2p\filesharing\FileHasher.class

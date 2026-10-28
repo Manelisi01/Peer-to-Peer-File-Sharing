@@ -3,6 +3,11 @@ package com.p2p.filesharing;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.InetSocketAddress;
+import java.util.Collections;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -81,7 +86,7 @@ public class P2pController {
 
     @PostMapping("/seeders")
     @ResponseStatus(HttpStatus.CREATED)
-    public SeederService.SharingInfo startSharing(@Valid @RequestBody SeedRequest request)
+    public SharingInfo startSharing(@Valid @RequestBody SeedRequest request)
             throws IOException {
         return seederService.startSharing(
                 downloadService.resolveStoragePath(request.fileName()),
@@ -100,7 +105,7 @@ public class P2pController {
     /** Desktop app: shares a file from its current location. */
     @PostMapping("/seeders/local")
     @ResponseStatus(HttpStatus.CREATED)
-    public SeederService.SharingInfo startSharingLocal(@Valid @RequestBody LocalSeedRequest request)
+    public SharingInfo startSharingLocal(@Valid @RequestBody LocalSeedRequest request)
             throws IOException {
         Path file = requireLocalFile(request.path());
         return seederService.startSharing(
@@ -139,12 +144,38 @@ public class P2pController {
     }
 
     @GetMapping("/peers")
-    public List<PeerAddress> peers(@RequestParam String hash) {
-        return trackerService.getPeers(hash);
+    public List<PeerAddress> peers(@RequestParam String hash,
+            @RequestParam(defaultValue = "127.0.0.1") String trackerHost,
+            @RequestParam(defaultValue = "5000") int trackerPort) throws IOException {
+        if (trackerPort < 1 || trackerPort > 65535) {
+            throw new IllegalArgumentException("Tracker port must be between 1 and 65535.");
+        }
+        return trackerService.query(hash, trackerHost, trackerPort).stream()
+                .map(address -> new PeerAddress(address.getAddress().getHostAddress(), address.getPort()))
+                .toList();
+    }
+
+    @GetMapping("/network-info")
+    public Map<String, String> networkInfo() throws IOException {
+        String candidate = "127.0.0.1";
+        for (NetworkInterface nic : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+            if (!nic.isUp() || nic.isLoopback() || nic.isVirtual()) continue;
+            for (InetAddress address : Collections.list(nic.getInetAddresses())) {
+                if (!(address instanceof Inet4Address) || address.isLoopbackAddress()
+                        || address.isLinkLocalAddress()) continue;
+                String ip = address.getHostAddress();
+                if (ip.startsWith("192.168.") || ip.startsWith("10.")
+                        || ip.matches("172\\.(1[6-9]|2[0-9]|3[01])\\..*")) {
+                    return Map.of("peerIp", ip);
+                }
+                candidate = ip;
+            }
+        }
+        return Map.of("peerIp", candidate);
     }
 
     @GetMapping("/seeders")
-    public List<SeederService.SharingInfo> seeders() {
+    public List<SharingInfo> seeders() {
         return seederService.getSharedFiles();
     }
 

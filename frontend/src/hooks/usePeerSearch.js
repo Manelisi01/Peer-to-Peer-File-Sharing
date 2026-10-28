@@ -2,7 +2,7 @@ import { startTransition, useState } from 'react';
 import { openwireApi } from '../api/openwireApi';
 import { isValidSha256 } from '../utils/format';
 
-export function usePeerSearch({ notify }) {
+export function usePeerSearch({ notify, network }) {
   const [hashInput, setHashInputRaw] = useState('');
   const [peers, setPeers] = useState([]);
   const [searchDone, setSearchDone] = useState(false);
@@ -27,7 +27,7 @@ export function usePeerSearch({ notify }) {
     }
     setSearching(true);
     try {
-      const found = await openwireApi.findPeers(hash);
+      const found = await openwireApi.findPeers(hash, network);
       startTransition(() => setPeers(found));
       setSearchDone(true);
       notify(`${found.length} peer${found.length === 1 ? '' : 's'} found`);
