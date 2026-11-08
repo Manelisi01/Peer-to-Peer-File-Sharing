@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { request } from '../api/httpClient';
+import { useCallback, useEffect, useState } from 'react';
+import { openwireApi } from '../api/openwireApi';
 
 const defaults = { trackerHost: '127.0.0.1', trackerPort: 5000, peerIp: '127.0.0.1', peerPort: 7000 };
+const hasNetworkAddress = (peerIp) => Boolean(peerIp && peerIp !== '127.0.0.1' && peerIp !== '0.0.0.0');
 const saved = () => {
   try { return { ...defaults, ...JSON.parse(localStorage.getItem('openwire-network') || '{}') }; }
   catch { return defaults; }
@@ -9,24 +10,44 @@ const saved = () => {
 
 export function useNetworkSettings() {
   const [network, setNetwork] = useState(saved);
-  useEffect(() => {
-    let active = true;
-    request('/api/network-info').then(({ peerIp }) => {
-      if (!active || !peerIp || peerIp === '127.0.0.1') return;
+  const [connected, setConnected] = useState(false);
+
+  const refreshNetwork = useCallback(async () => {
+    try {
+      const { peerIp } = await openwireApi.getNetworkInfo();
+      setConnected(hasNetworkAddress(peerIp));
       setNetwork(current => {
-        // Only replace loopback; never overwrite an address the user selected.
-        const next = { ...current, peerIp: current.peerIp === '127.0.0.1' ? peerIp : current.peerIp,
-          trackerHost: current.trackerHost === '127.0.0.1' ? peerIp : current.trackerHost };
+        if (!hasNetworkAddress(peerIp) || current.peerIp !== '127.0.0.1') return current;
+        const next = {
+          ...current,
+          peerIp,
+          trackerHost: current.trackerHost === '127.0.0.1' ? peerIp : current.trackerHost,
+        };
         localStorage.setItem('openwire-network', JSON.stringify(next));
         return next;
       });
-    }).catch(() => {});
-    return () => { active = false; };
+    } catch {
+      setConnected(false);
+    }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      if (active) refreshNetwork();
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 12000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [refreshNetwork]);
+
   const updateField = (field, value) => setNetwork(current => {
     const next = { ...current, [field]: value };
     localStorage.setItem('openwire-network', JSON.stringify(next));
     return next;
   });
-  return { network, updateField };
+  return { network, updateField, connected, refreshNetwork };
 }

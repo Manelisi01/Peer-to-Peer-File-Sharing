@@ -15,7 +15,7 @@ export default function Topbar({ online, settingsOpen, onRefresh, onToggleSettin
         </button>
         <div className={`connection-indicator ${online ? 'is-online' : 'is-offline'}`}>
           <span className="connection-dot" />
-          <span>{online ? 'Network online' : 'API unavailable'}</span>
+          <span>{online ? 'Online' : 'Offline'}</span>
         </div>
         <button className="network-trigger" onClick={onToggleSettings}>
           <span className="network-trigger-icon"><Server size={15} /></span>

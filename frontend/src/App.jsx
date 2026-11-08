@@ -20,10 +20,14 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
 
   const { toast, notify, dismiss } = useToast();
-  const { network, updateField } = useNetworkSettings();
+  const { network, updateField, connected, refreshNetwork } = useNetworkSettings();
   const library = useLibrary({ network, notify });
   const downloads = useDownloads({ network, notify });
   const peerSearch = usePeerSearch({ notify, network });
+
+  async function handleRefresh() {
+    await Promise.all([library.refresh(), refreshNetwork()]);
+  }
 
   async function handleUpload(fileList) {
     const uploaded = await library.addFiles(fileList);
@@ -50,12 +54,14 @@ export default function App() {
     return notify(`History cleared; ${kept} active ${kept === 1 ? 'transfer' : 'transfers'} kept`);
   }
 
+  const online = connected && library.online;
+
   return (
     <div className="app-shell">
       <Topbar
-        online={library.online}
+        online={online}
         settingsOpen={showSettings}
-        onRefresh={library.refresh}
+        onRefresh={handleRefresh}
         onToggleSettings={() => setShowSettings((open) => !open)}
       />
 
@@ -66,7 +72,7 @@ export default function App() {
       <main id="top" className="workspace">
         <PageIntro trackerPort={network.trackerPort} peerPort={network.peerPort} />
         <MetricsRow
-          online={library.online}
+          online={online}
           sharedFiles={library.server?.sharedFiles}
           activeTransfers={downloads.activeCount}
         />

@@ -4,6 +4,7 @@ import { request, jsonPost } from './httpClient';
 export const openwireApi = {
   getStatus: () => request('/api/status'),
   getSeeders: () => request('/api/seeders'),
+  getNetworkInfo: () => request('/api/network-info'),
 
   uploadFile(file) {
     const form = new FormData();
