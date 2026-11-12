@@ -33,7 +33,14 @@ export default function ActivityPanel(props) {
       ) : (
         <div className="job-list">
           {jobs.slice(0, visibleCount).map(function (job) {
-            return <JobRow key={job.id} job={job} />;
+            return (
+              <JobRow
+                key={job.id}
+                job={job}
+                onCancel={props.onCancel}
+                canceling={props.cancelingIds && props.cancelingIds.indexOf(job.id) !== -1}
+              />
+            );
           })}
         </div>
       )}

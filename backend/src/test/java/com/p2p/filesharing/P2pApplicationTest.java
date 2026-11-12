@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -33,12 +36,38 @@ class P2pApplicationTest {
     @Autowired
     private TestRestTemplate restTemplate;
 
+    @Autowired
+    private TrackerService trackerService;
+
     @Test
     void startsHttpApiAndEmbeddedTracker() {
         ResponseEntity<Map> response = restTemplate.getForEntity("/api/status", Map.class);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("UP", response.getBody().get("status"));
+    }
+
+    @Test
+    void trackerStatusReportsConfiguredTrackerReachability() {
+        DatagramSocket trackerSocket =
+                (DatagramSocket) ReflectionTestUtils.getField(trackerService, "serverSocket");
+        int trackerPort = trackerSocket.getLocalPort();
+
+        ResponseEntity<Map> response = restTemplate.getForEntity(
+                "/api/tracker/status?trackerHost=127.0.0.1&trackerPort=" + trackerPort, Map.class);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertTrue((Boolean) response.getBody().get("connected"));
+    }
+
+    @Test
+    void networkInfoReturnsLanAddressOrLoopback() throws Exception {
+        ResponseEntity<Map> response = restTemplate.getForEntity("/api/network-info", Map.class);
+        String peerIp = (String) response.getBody().get("peerIp");
+        InetAddress address = InetAddress.getByName(peerIp);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertTrue(address.isSiteLocalAddress() || address.isLoopbackAddress());
     }
 
     @Test

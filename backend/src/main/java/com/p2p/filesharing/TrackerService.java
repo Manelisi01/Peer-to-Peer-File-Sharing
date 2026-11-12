@@ -8,6 +8,7 @@ import java.net.DatagramSocket;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.PortUnreachableException;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -114,6 +115,33 @@ public class TrackerService {
         }
     }
 
+    public boolean isTrackerAvailable(String trackerHost, int trackerPort) throws IOException {
+        if (trackerHost == null || trackerHost.isBlank()) {
+            throw new IllegalArgumentException("Tracker host is required.");
+        }
+        if (trackerPort < 1 || trackerPort > 65535) {
+            throw new IllegalArgumentException("Tracker port must be between 1 and 65535.");
+        }
+
+        InetAddress trackerAddress = InetAddress.getByName(trackerHost);
+        byte[] request = "PING".getBytes(StandardCharsets.UTF_8);
+        try (DatagramSocket socket = new DatagramSocket()) {
+            socket.setSoTimeout(3000);
+            socket.send(new DatagramPacket(request, request.length, trackerAddress, trackerPort));
+
+            byte[] responseBytes = new byte[BUFFER_SIZE];
+            DatagramPacket response = new DatagramPacket(responseBytes, responseBytes.length);
+            socket.receive(response);
+            String payload = new String(response.getData(), response.getOffset(),
+                    response.getLength(), StandardCharsets.UTF_8).trim();
+            return "PONG".equals(payload)
+                    && trackerAddress.equals(response.getAddress())
+                    && trackerPort == response.getPort();
+        } catch (SocketTimeoutException | PortUnreachableException e) {
+            return false;
+        }
+    }
+
     private void listen(DatagramSocket socket) {
         while (!socket.isClosed()) {
             byte[] buffer = new byte[BUFFER_SIZE];
@@ -143,6 +171,16 @@ public class TrackerService {
         String command = parts[0];
         if ("REGISTER".equals(command) || "UPDATE".equals(command)) {
             updatePeer(parts);
+            return;
+        }
+
+        if ("PING".equals(command)) {
+            if (parts.length != 1) {
+                throw new IllegalArgumentException("PING takes no arguments.");
+            }
+            byte[] response = "PONG".getBytes(StandardCharsets.UTF_8);
+            socket.send(new DatagramPacket(response, response.length,
+                    packet.getAddress(), packet.getPort()));
             return;
         }
 
@@ -181,10 +219,6 @@ public class TrackerService {
         // One address can seed many files, so the entry is keyed by hash as well.
         String key = peerKey(hash, ip, port);
         PeerInfo updatedPeer = new PeerInfo(ip, port, hash, System.currentTimeMillis());
-        if ("UPDATE".equals(parts[0])) {
-            peers.computeIfPresent(key, (existingKey, existingPeer) -> updatedPeer);
-            return;
-        }
         peers.put(key, updatedPeer);
     }
 

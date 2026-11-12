@@ -13,6 +13,11 @@ export const openwireApi = {
     return request('/api/network-info');
   },
 
+  getTrackerStatus: function (net) {
+    return request('/api/tracker/status?trackerHost=' + encodeURIComponent(net.trackerHost)
+      + '&trackerPort=' + encodeURIComponent(net.trackerPort));
+  },
+
   uploadFile: function (file) {
     const form = new FormData();
     form.append('file', file);

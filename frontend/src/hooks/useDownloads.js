@@ -11,6 +11,8 @@ export function useDownloads(options) {
   const [starting, setStarting] = useState(false);
   const savingIds = useRef(new Set());
   const savedIds = useRef(new Set());
+  const cancelRequestedIds = useRef(new Set());
+  const [cancelingIds, setCancelingIds] = useState([]);
   const [jobs, setJobs] = useState(function () {
     return downloadStorage.load();
   });
@@ -26,6 +28,25 @@ export function useDownloads(options) {
       downloadStorage.save(next);
       return next;
     });
+  }
+
+  function saveCompletedJob(job) {
+    if (savingIds.current.has(job.id) || savedIds.current.has(job.id)) {
+      return;
+    }
+
+    savingIds.current.add(job.id);
+    saveCompletedDownload(job.id, job.targetFile)
+      .then(function (destination) {
+        savedIds.current.add(job.id);
+        notify('Saved ' + job.targetFile + ' to ' + destination);
+      })
+      .catch(function (error) {
+        notify('Could not save ' + job.targetFile + ': ' + error.message, 'error');
+      })
+      .finally(function () {
+        savingIds.current.delete(job.id);
+      });
   }
 
   useEffect(function () {
@@ -47,30 +68,20 @@ export function useDownloads(options) {
       for (let i = 0; i < updates.length; i += 1) {
         const job = updates[i];
 
-        if (!job || job.status !== 'COMPLETED' || savingIds.current.has(job.id) || savedIds.current.has(job.id)) {
+        if (!job || cancelRequestedIds.current.has(job.id)
+            || job.status !== 'COMPLETED' || savingIds.current.has(job.id) || savedIds.current.has(job.id)) {
           continue;
         }
 
-        savingIds.current.add(job.id);
-
-        saveCompletedDownload(job.id, job.targetFile)
-          .then(function (destination) {
-            savedIds.current.add(job.id);
-            notify('Saved ' + job.targetFile + ' to ' + destination);
-          })
-          .catch(function (error) {
-            notify('Could not save ' + job.targetFile + ': ' + error.message, 'error');
-          })
-          .finally(function () {
-            savingIds.current.delete(job.id);
-          });
+        saveCompletedJob(job);
       }
 
       commit(function (current) {
         return current.map(function (jobInList) {
           for (let j = 0; j < updates.length; j += 1) {
             const update = updates[j];
-            if (update && update.id === jobInList.id) {
+            if (update && update.id === jobInList.id
+                && !cancelRequestedIds.current.has(update.id)) {
               return update;
             }
           }
@@ -124,6 +135,49 @@ export function useDownloads(options) {
     }
   }
 
+  async function cancel(id) {
+    if (cancelRequestedIds.current.has(id)) {
+      return false;
+    }
+
+    cancelRequestedIds.current.add(id);
+    setCancelingIds(function (current) {
+      return current.concat(id);
+    });
+
+    try {
+      const update = await openwireApi.cancelDownload(id);
+      commit(function (current) {
+        return current.map(function (job) {
+          return job.id === update.id ? update : job;
+        });
+      });
+
+      if (update.status === 'CANCELLED') {
+        notify('Download cancelled');
+        return true;
+      }
+
+      if (isActiveJob(update)) {
+        cancelRequestedIds.current.delete(id);
+      } else if (update.status === 'COMPLETED') {
+        saveCompletedJob(update);
+      }
+      notify('This download is already finishing and could not be cancelled', 'error');
+      return false;
+    } catch (error) {
+      cancelRequestedIds.current.delete(id);
+      notify(error.message || 'Could not cancel download', 'error');
+      return false;
+    } finally {
+      setCancelingIds(function (current) {
+        return current.filter(function (cancelingId) {
+          return cancelingId !== id;
+        });
+      });
+    }
+  }
+
   function clearFinished() {
     const kept = jobs.filter(isActiveJob);
     commit(function () {
@@ -137,6 +191,8 @@ export function useDownloads(options) {
     starting: starting,
     activeCount: activeJobs.length,
     start: start,
+    cancel: cancel,
+    cancelingIds: cancelingIds,
     clearFinished: clearFinished
   };
 }

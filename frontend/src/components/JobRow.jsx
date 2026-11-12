@@ -1,8 +1,10 @@
-import { ArrowDownToLine, CheckCircle2, CircleAlert } from 'lucide-react';
+import { ArrowDownToLine, CheckCircle2, CircleAlert, X } from 'lucide-react';
 import StatusPill from './StatusPill';
+import { isActiveJob } from '../utils/jobStatus';
 
 export default function JobRow(props) {
-  const { job } = props;
+  const { job, onCancel, canceling } = props;
+  const canCancel = isActiveJob(job) && onCancel;
   const complete = job.status === 'COMPLETED';
   const failed = job.status === 'FAILED';
   const iconState = complete ? 'complete' : failed ? 'failed' : '';
@@ -27,7 +29,24 @@ export default function JobRow(props) {
         <div className="progress-track"><span className={barState} style={{ width: width + '%' }} /></div>
         <small>{job.progress !== undefined && job.progress !== null ? job.progress : 0}%</small>
       </div>
-      <StatusPill status={job.status} />
+      <div className="job-actions">
+        <StatusPill status={job.status} />
+        {canCancel && (
+          <button
+            className="job-cancel"
+            type="button"
+            onClick={function () {
+              onCancel(job.id);
+            }}
+            disabled={canceling}
+            aria-busy={Boolean(canceling)}
+            aria-label={(canceling ? 'Cancelling ' : 'Cancel ') + job.targetFile}
+            title={canceling ? 'Cancelling download' : 'Cancel download'}
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
     </article>
   );
 }

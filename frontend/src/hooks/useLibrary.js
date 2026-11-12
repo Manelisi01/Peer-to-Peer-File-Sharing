@@ -49,9 +49,11 @@ export function useLibrary(options) {
   const refresh = useCallback(async function () {
     try {
       await load();
+      return true;
     } catch (error) {
       setServer({ status: 'DOWN', sharedFiles: 0 });
       notify(error.message || 'Could not refresh node status', 'error');
+      return false;
     }
   }, [load, notify]);
 

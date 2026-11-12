@@ -131,6 +131,7 @@ Status and hashing:
 
 ```bash
 curl http://127.0.0.1:8080/api/status
+curl "http://127.0.0.1:8080/api/tracker/status?trackerHost=127.0.0.1&trackerPort=5000"
 curl "http://127.0.0.1:8080/api/files/hash?fileName=sample.iso"     # file inside the storage folder
 ```
 

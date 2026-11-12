@@ -15,8 +15,10 @@
 .network-trigger-icon { display: grid; color: var(--forest); }
 .network-trigger > svg:last-child { color: #88938d; transition: transform .18s; }
 .network-trigger > .chevron-up { transform: rotate(180deg); }
+.refresh-button.is-refreshing svg { animation: refresh-spin .8s linear infinite; }
 
 @keyframes pulse { 0%, 100% { transform: scale(.8); opacity: .8; } 50% { transform: scale(1.35); opacity: 0; } }
+@keyframes refresh-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 860px) {
   .topbar { padding: 0 4%; }

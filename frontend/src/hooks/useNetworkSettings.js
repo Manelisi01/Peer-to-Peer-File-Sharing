@@ -19,13 +19,19 @@ function saved() {
 export function useNetworkSettings() {
   const [network, setNetwork] = useState(saved);
   const [connected, setConnected] = useState(false);
+  const [trackerConnected, setTrackerConnected] = useState(false);
 
   const refreshNetwork = useCallback(async function () {
     try {
-      const info = await openwireApi.getNetworkInfo();
+      const results = await Promise.all([
+        openwireApi.getNetworkInfo(),
+        openwireApi.getTrackerStatus(network)
+      ]);
+      const info = results[0];
       const peerIp = info.peerIp;
 
       setConnected(hasNetworkAddress(peerIp));
+      setTrackerConnected(Boolean(results[1].connected));
       setNetwork(function (current) {
         if (!hasNetworkAddress(peerIp) || current.peerIp !== '127.0.0.1') {
           return current;
@@ -39,10 +45,13 @@ export function useNetworkSettings() {
         localStorage.setItem('openwire-network', JSON.stringify(next));
         return next;
       });
+      return true;
     } catch (error) {
       setConnected(false);
+      setTrackerConnected(false);
+      return false;
     }
-  }, []);
+  }, [network.trackerHost, network.trackerPort]);
 
   useEffect(function () {
     let active = true;
@@ -75,6 +84,7 @@ export function useNetworkSettings() {
     network,
     updateField,
     connected,
+    trackerConnected,
     refreshNetwork
   };
 }

@@ -1,7 +1,7 @@
 import { ChevronDown, Network, RefreshCw, Server } from 'lucide-react';
 
 export default function Topbar(props) {
-  const { online, settingsOpen, onRefresh, onToggleSettings } = props;
+  const { online, refreshing, settingsOpen, onRefresh, onToggleSettings } = props;
 
   let connectionClass = 'connection-indicator';
   if (online) {
@@ -24,7 +24,15 @@ export default function Topbar(props) {
         <span className="brand-caption">P2P CONTROL ROOM</span>
       </a>
       <div className="topbar-right">
-        <button className="icon-button refresh-button" onClick={onRefresh} title="Refresh status" aria-label="Refresh status">
+        <button
+          className={'icon-button refresh-button' + (refreshing ? ' is-refreshing' : '')}
+          onClick={onRefresh}
+          title={refreshing ? 'Refreshing status' : 'Refresh status'}
+          aria-label={refreshing ? 'Refreshing status' : 'Refresh status'}
+          aria-busy={refreshing}
+          disabled={refreshing}
+          type="button"
+        >
           <RefreshCw size={16} />
         </button>
         <div className={connectionClass}>

@@ -17,19 +17,34 @@ import Toast from './components/Toast';
 
 export default function App() {
   const [showSettings, setShowSettings] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const toastState = useToast();
   const { toast, notify, dismiss } = toastState;
 
   const networkState = useNetworkSettings();
-  const { network, updateField, connected, refreshNetwork } = networkState;
+  const { network, updateField, connected, trackerConnected, refreshNetwork } = networkState;
 
   const library = useLibrary({ network, notify });
   const downloads = useDownloads({ network, notify });
   const peerSearch = usePeerSearch({ notify, network });
 
   async function handleRefresh() {
-    await Promise.all([library.refresh(), refreshNetwork()]);
+    if (refreshing) {
+      return;
+    }
+
+    setRefreshing(true);
+    try {
+      const results = await Promise.all([library.refresh(), refreshNetwork()]);
+      if (!results[1]) {
+        notify('Could not refresh network status', 'error');
+      } else if (results[0]) {
+        notify('Status refreshed');
+      }
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   async function handleUpload(fileList) {
@@ -63,12 +78,13 @@ export default function App() {
     return notify('History cleared; ' + kept + ' active ' + (kept === 1 ? 'transfer' : 'transfers') + ' kept');
   }
 
-  const online = connected && library.online;
+  const online = connected && trackerConnected && library.online;
 
   return (
     <div className="app-shell">
       <Topbar
         online={online}
+        refreshing={refreshing}
         settingsOpen={showSettings}
         onRefresh={handleRefresh}
         onToggleSettings={function () {
@@ -117,7 +133,12 @@ export default function App() {
           />
         </div>
 
-        <ActivityPanel jobs={downloads.jobs} onClear={handleClearHistory} onCancel={downloads.cancel} />
+        <ActivityPanel
+          jobs={downloads.jobs}
+          onClear={handleClearHistory}
+          onCancel={downloads.cancel}
+          cancelingIds={downloads.cancelingIds}
+        />
         <PageFooter />
       </main>
 

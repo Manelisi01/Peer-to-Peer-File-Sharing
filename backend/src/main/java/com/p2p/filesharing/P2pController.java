@@ -63,6 +63,12 @@ public class P2pController {
         return Map.of("status", "UP", "sharedFiles", seederService.getSharedFileCount());
     }
 
+    @GetMapping("/tracker/status")
+    public Map<String, Boolean> trackerStatus(
+            @RequestParam String trackerHost, @RequestParam int trackerPort) throws IOException {
+        return Map.of("connected", trackerService.isTrackerAvailable(trackerHost, trackerPort));
+    }
+
     @GetMapping("/files/hash")
     public Map<String, String> hashFile(@RequestParam String fileName) throws IOException {
         return Map.of("fileName", fileName, "fileHash", downloadService.hashFile(fileName));
@@ -167,8 +173,11 @@ public class P2pController {
 
     @GetMapping("/network-info")
     public Map<String, String> networkInfo() throws IOException {
-        String candidate = "127.0.0.1";
+        String loopback = "127.0.0.1";
         Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+        if (interfaces == null) {
+            return Map.of("peerIp", loopback);
+        }
 
         while (interfaces.hasMoreElements()) {
             NetworkInterface nic = interfaces.nextElement();
@@ -188,10 +197,9 @@ public class P2pController {
                 if (isPrivateNetworkAddress(ip)) {
                     return Map.of("peerIp", ip);
                 }
-                candidate = ip;
             }
         }
-        return Map.of("peerIp", candidate);
+        return Map.of("peerIp", loopback);
     }
 
     private static boolean isPrivateNetworkAddress(String ip) {
