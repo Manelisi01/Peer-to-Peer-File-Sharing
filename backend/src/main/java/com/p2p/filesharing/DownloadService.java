@@ -12,12 +12,13 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -29,8 +30,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.Comparator;
-import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -75,9 +74,12 @@ public class DownloadService {
         String displayName = storageRelativePath(requested);
         DownloadJob job = new DownloadJob(displayName);
         // Temporary downloads get their own folder so they can never overwrite a library file.
-        Path destination = keepDownloads
-                ? requested
-                : resolveStoragePath(TEMP_DIR + "/" + job.getId() + "/" + displayName);
+        Path destination;
+        if (keepDownloads) {
+            destination = requested;
+        } else {
+            destination = resolveStoragePath(TEMP_DIR + "/" + job.getId() + "/" + displayName);
+        }
         downloadPaths.put(job.getId(), destination);
         jobs.put(job.getId(), job);
         job.attach(jobExecutor.submit(() -> runDownload(job, destination, request)));
@@ -110,7 +112,10 @@ public class DownloadService {
         if (job == null || file == null || !"COMPLETED".equals(job.getStatus())) {
             return null;
         }
-        return Files.isRegularFile(file) ? file : null;
+        if (Files.isRegularFile(file)) {
+            return file;
+        }
+        return null;
     }
 
     /** Called once the browser has received the file. No-op when downloads are kept. */
@@ -147,14 +152,37 @@ public class DownloadService {
             return;
         }
         Path dir = resolveStoragePath(TEMP_DIR);
+        if (Files.isSymbolicLink(dir)) {
+            try {
+                Files.deleteIfExists(dir);
+            } catch (IOException e) {
+                log.warn("Could not clear {}", dir, e);
+            }
+            return;
+        }
         if (!Files.isDirectory(dir)) {
             return;
         }
-        try (Stream<Path> paths = Files.walk(dir)) {
-            paths.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+
+        try {
+            deleteTemporaryDirectory(dir);
         } catch (IOException e) {
             log.warn("Could not clear {}", dir, e);
         }
+    }
+
+    private void deleteTemporaryDirectory(Path directory) throws IOException {
+        try (DirectoryStream<Path> entries = Files.newDirectoryStream(directory)) {
+            for (Path entry : entries) {
+                if (Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS)) {
+                    deleteTemporaryDirectory(entry);
+                } else {
+                    Files.deleteIfExists(entry);
+                }
+            }
+        }
+
+        Files.deleteIfExists(directory);
     }
 
     public String hashFile(String fileName) throws IOException {
@@ -371,7 +399,7 @@ public class DownloadService {
     }
 
     private static byte[] hashBytes(String fileHash) {
-        return HexFormat.of().parseHex(fileHash.toLowerCase(Locale.ROOT));
+        return FileHasher.fromHexString(fileHash.toLowerCase(Locale.ROOT));
     }
 
     private int getTotalChunks(InetSocketAddress seeder, byte[] hash) throws IOException {
@@ -423,7 +451,14 @@ public class DownloadService {
                 .relativize(path).toString();
     }
 
-    private record ChunkResult(int chunkNumber, byte[] data) {
+    private static class ChunkResult {
+        private final int chunkNumber;
+        private final byte[] data;
+
+        private ChunkResult(int chunkNumber, byte[] data) {
+            this.chunkNumber = chunkNumber;
+            this.data = data;
+        }
     }
 
     public record FileInfo(String fileName, long fileSize, String fileHash) {

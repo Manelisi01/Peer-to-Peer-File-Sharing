@@ -14,7 +14,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HexFormat;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -120,7 +119,7 @@ class SeederServiceTest {
         try (Socket socket = new Socket("127.0.0.1", port)) {
             socket.setSoTimeout(3000);
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-            out.write(HexFormat.of().parseHex(oldInfo.fileHash()));
+            out.write(FileHasher.fromHexString(oldInfo.fileHash()));
             out.writeInt(-1);
             out.flush();
             assertEquals(-1, socket.getInputStream().read());
@@ -187,7 +186,7 @@ class SeederServiceTest {
         try (Socket socket = new Socket("127.0.0.1", port)) {
             socket.setSoTimeout(3000);
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-            out.write(HexFormat.of().parseHex(hash));
+            out.write(FileHasher.fromHexString(hash));
             out.writeInt(-1);
             out.flush();
             return new DataInputStream(socket.getInputStream()).readInt();
@@ -198,7 +197,7 @@ class SeederServiceTest {
         try (Socket socket = new Socket("127.0.0.1", port)) {
             socket.setSoTimeout(3000);
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-            out.write(HexFormat.of().parseHex(hash));
+            out.write(FileHasher.fromHexString(hash));
             out.writeInt(chunk);
             out.flush();
             return socket.getInputStream().readAllBytes();

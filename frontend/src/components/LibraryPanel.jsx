@@ -2,9 +2,9 @@ import { FileArchive, HardDrive, ShieldCheck } from 'lucide-react';
 import DropZone from './DropZone';
 import FileRow from './FileRow';
 
-export default function LibraryPanel({
-  files, busy, onUpload, onSeed, onUseHash, onDelete, onCopyHash,
-}) {
+export default function LibraryPanel(props) {
+  const { files, busy, onUpload, onSeed, onUseHash, onDelete, onCopyHash } = props;
+
   return (
     <section className="panel library-panel">
       <div className="section-heading">
@@ -18,17 +18,19 @@ export default function LibraryPanel({
       <div className="file-list">
         {files.length === 0 ? (
           <div className="empty-files"><span className="empty-mark"><FileArchive size={20} /></span><strong>No files in this node</strong><small>Add a file to start sharing with peers.</small></div>
-        ) : files.map((file) => (
-          <FileRow
-            key={`${file.fileHash}-${file.fileName}`}
-            file={file}
-            busy={busy}
-            onSeed={onSeed}
-            onUseHash={onUseHash}
-            onDelete={onDelete}
-            onCopyHash={onCopyHash}
-          />
-        ))}
+        ) : files.map(function (file) {
+          return (
+            <FileRow
+              key={file.fileHash + '-' + file.fileName}
+              file={file}
+              busy={busy}
+              onSeed={onSeed}
+              onUseHash={onUseHash}
+              onDelete={onDelete}
+              onCopyHash={onCopyHash}
+            />
+          );
+        })}
       </div>
       <div className="library-footer"><ShieldCheck size={14} /><span>File integrity checked with SHA-256</span></div>
     </section>

@@ -1,10 +1,13 @@
 package com.p2p.filesharing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -20,12 +23,15 @@ class RemoteTrackerQueryTest {
                     byte[] response = "192.168.1.20:7000".getBytes(StandardCharsets.UTF_8);
                     fakeTracker.send(new DatagramPacket(response, response.length,
                             request.getAddress(), request.getPort()));
-                } catch (Exception e) { throw new RuntimeException(e); }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
             });
             responder.start();
             TrackerService service = new TrackerService();
             ReflectionTestUtils.setField(service, "enabled", false);
-            var peers = service.query("a".repeat(64), "127.0.0.1", fakeTracker.getLocalPort());
+            List<InetSocketAddress> peers =
+                    service.query("a".repeat(64), "127.0.0.1", fakeTracker.getLocalPort());
             assertEquals(1, peers.size());
             assertEquals("192.168.1.20", peers.get(0).getAddress().getHostAddress());
             responder.join(2000);

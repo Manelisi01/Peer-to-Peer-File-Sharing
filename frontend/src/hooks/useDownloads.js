@@ -5,67 +5,115 @@ import { isValidSha256 } from '../utils/format';
 import { isActiveJob } from '../utils/jobStatus';
 import { saveCompletedDownload } from '../services/desktop';
 
-export function useDownloads({ network, notify }) {
+export function useDownloads(options) {
+  const { network, notify } = options;
+
   const [starting, setStarting] = useState(false);
   const savingIds = useRef(new Set());
   const savedIds = useRef(new Set());
-  const [jobs, setJobs] = useState(() => downloadStorage.load());
+  const [jobs, setJobs] = useState(function () {
+    return downloadStorage.load();
+  });
 
   const activeJobs = jobs.filter(isActiveJob);
-  const activeJobIds = activeJobs.map((j) => j.id).join('|');
+  const activeJobIds = activeJobs.map(function (job) {
+    return job.id;
+  }).join('|');
 
-  // Single place that updates state and persists it.
-  const commit = (updater) =>
-    setJobs((current) => {
+  function commit(updater) {
+    setJobs(function (current) {
       const next = updater(current);
       downloadStorage.save(next);
       return next;
     });
+  }
 
-  useEffect(() => {
-    if (!activeJobIds) return undefined;
+  useEffect(function () {
+    if (!activeJobIds) {
+      return undefined;
+    }
+
     const ids = activeJobIds.split('|');
 
-    const poll = async () => {
+    async function poll() {
       const updates = await Promise.all(
-        ids.map((id) => openwireApi.getDownload(id).catch(() => null)),
+        ids.map(function (id) {
+          return openwireApi.getDownload(id).catch(function () {
+            return null;
+          });
+        })
       );
-      for (const job of updates) {
-        if (!job || job.status !== 'COMPLETED' || savingIds.current.has(job.id) || savedIds.current.has(job.id)) continue;
+
+      for (let i = 0; i < updates.length; i += 1) {
+        const job = updates[i];
+
+        if (!job || job.status !== 'COMPLETED' || savingIds.current.has(job.id) || savedIds.current.has(job.id)) {
+          continue;
+        }
+
         savingIds.current.add(job.id);
+
         saveCompletedDownload(job.id, job.targetFile)
-          .then((destination) => {
+          .then(function (destination) {
             savedIds.current.add(job.id);
-            notify(`Saved ${job.targetFile} to ${destination}`);
+            notify('Saved ' + job.targetFile + ' to ' + destination);
           })
-          .catch((error) => notify(`Could not save ${job.targetFile}: ${error.message}`, 'error'))
-          .finally(() => savingIds.current.delete(job.id));
+          .catch(function (error) {
+            notify('Could not save ' + job.targetFile + ': ' + error.message, 'error');
+          })
+          .finally(function () {
+            savingIds.current.delete(job.id);
+          });
       }
-      commit((current) => current.map((job) => updates.find((u) => u?.id === job.id) || job));
-    };
+
+      commit(function (current) {
+        return current.map(function (jobInList) {
+          for (let j = 0; j < updates.length; j += 1) {
+            const update = updates[j];
+            if (update && update.id === jobInList.id) {
+              return update;
+            }
+          }
+          return jobInList;
+        });
+      });
+    }
 
     poll();
     const interval = window.setInterval(poll, 1400);
-    return () => window.clearInterval(interval);
+    return function () {
+      window.clearInterval(interval);
+    };
   }, [activeJobIds, notify]);
 
-  const addJob = (job) => commit((current) => [job, ...current.filter((j) => j.id !== job.id)]);
+  function addJob(job) {
+    commit(function (current) {
+      const next = current.filter(function (item) {
+        return item.id !== job.id;
+      });
+      return [job].concat(next);
+    });
+  }
 
-  // Resolves true when the download was queued.
-  const start = async (rawHash, rawTarget) => {
+  async function start(rawHash, rawTarget) {
     const fileHash = rawHash.trim();
     const targetFile = rawTarget.trim();
+
     if (!isValidSha256(fileHash)) {
       notify('Enter a valid SHA-256 hash before downloading', 'error');
       return false;
     }
+
     if (!targetFile) {
       notify('Choose a name for the downloaded file', 'error');
       return false;
     }
+
     setStarting(true);
+
     try {
-      addJob(await openwireApi.startDownload({ targetFile, fileHash }, network));
+      const job = await openwireApi.startDownload({ targetFile, fileHash }, network);
+      addJob(job);
       notify('Download queued');
       return true;
     } catch (error) {
@@ -74,14 +122,21 @@ export function useDownloads({ network, notify }) {
     } finally {
       setStarting(false);
     }
-  };
+  }
 
-  // Returns how many active jobs were kept.
-  const clearFinished = () => {
+  function clearFinished() {
     const kept = jobs.filter(isActiveJob);
-    commit(() => kept);
+    commit(function () {
+      return kept;
+    });
     return kept.length;
-  };
+  }
 
-  return { jobs, starting, activeCount: activeJobs.length, start, clearFinished };
+  return {
+    jobs: jobs,
+    starting: starting,
+    activeCount: activeJobs.length,
+    start: start,
+    clearFinished: clearFinished
+  };
 }

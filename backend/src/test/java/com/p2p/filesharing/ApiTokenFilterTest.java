@@ -3,17 +3,23 @@ package com.p2p.filesharing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import java.lang.reflect.Proxy;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 
 class ApiTokenFilterTest {
 
     private final AtomicInteger passedThrough = new AtomicInteger();
     private final AtomicInteger errorStatus = new AtomicInteger();
-    private final FilterChain chain = (request, response) -> passedThrough.incrementAndGet();
+    private final FilterChain chain = new FilterChain() {
+        @Override
+        public void doFilter(ServletRequest request, ServletResponse response) {
+            passedThrough.incrementAndGet();
+        }
+    };
 
     @Test
     void allowsEverythingWhenNoTokenIsConfigured() throws Exception {
@@ -52,26 +58,22 @@ class ApiTokenFilterTest {
         assertEquals(2, passedThrough.get());
     }
 
-    private static HttpServletRequest request(String uri, String token) {
-        return (HttpServletRequest) Proxy.newProxyInstance(
-                ApiTokenFilterTest.class.getClassLoader(),
-                new Class<?>[] {HttpServletRequest.class},
-                (proxy, method, args) -> switch (method.getName()) {
-                    case "getRequestURI" -> uri;
-                    case "getHeader" -> ApiTokenFilter.HEADER.equalsIgnoreCase((String) args[0]) ? token : null;
-                    default -> null;
-                });
+    private static MockHttpServletRequest request(String uri, String token) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI(uri);
+        if (token != null) {
+            request.addHeader(ApiTokenFilter.HEADER, token);
+        }
+        return request;
     }
 
-    private HttpServletResponse response() {
-        return (HttpServletResponse) Proxy.newProxyInstance(
-                ApiTokenFilterTest.class.getClassLoader(),
-                new Class<?>[] {HttpServletResponse.class},
-                (proxy, method, args) -> {
-                    if (method.getName().equals("sendError")) {
-                        errorStatus.set((Integer) args[0]);
-                    }
-                    return null;
-                });
+    private MockHttpServletResponse response() {
+        return new MockHttpServletResponse() {
+            @Override
+            public void sendError(int status) {
+                errorStatus.set(status);
+                super.setStatus(status);
+            }
+        };
     }
 }

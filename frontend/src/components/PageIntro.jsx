@@ -1,4 +1,11 @@
-export default function PageIntro({ trackerPort, peerPort }) {
+export default function PageIntro(props) {
+  const { trackerPort, peerPort } = props;
+
+  const signalLines = [];
+  for (let i = 0; i < 37; i += 1) {
+    signalLines.push(<i key={i} />);
+  }
+
   return (
     <section className="page-intro">
       <div>
@@ -8,7 +15,7 @@ export default function PageIntro({ trackerPort, peerPort }) {
       </div>
       <div className="intro-signal" aria-hidden="true">
         <div className="signal-label"><span>LOCAL NODE</span><span>01 / ACTIVE</span></div>
-        <div className="signal-lines">{Array.from({ length: 37 }, (_, i) => <i key={i} />)}</div>
+        <div className="signal-lines">{signalLines}</div>
         <div className="signal-footer"><span>UDP : {trackerPort}</span><span>TCP : {peerPort}</span></div>
       </div>
     </section>

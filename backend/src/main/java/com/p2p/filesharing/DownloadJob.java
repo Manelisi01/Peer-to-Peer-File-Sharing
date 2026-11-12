@@ -11,9 +11,8 @@ public final class DownloadJob {
     private final String targetFile;
     private final Instant createdAt = Instant.now();
     private final AtomicInteger progress = new AtomicInteger();
-    private volatile String status = "QUEUED";
-    private volatile String message = "Download queued.";
-    private volatile Future<?> task;
+    private JobState state = new JobState("QUEUED", "Download queued.");
+    private Future<?> task;
     // Set once the file is being moved into place; cancelling is no longer possible after this.
     private boolean finalizing;
 
@@ -37,38 +36,45 @@ public final class DownloadJob {
         return progress.get();
     }
 
-    public String getStatus() {
-        return status;
+    public synchronized String getStatus() {
+        return state.status();
     }
 
-    public String getMessage() {
-        return message;
+    public synchronized String getMessage() {
+        return state.message();
     }
 
-    public boolean isCancelled() {
-        return "CANCELLED".equals(status);
+    public synchronized boolean isCancelled() {
+        return "CANCELLED".equals(state.status());
+    }
+
+    public synchronized Snapshot snapshot() {
+        JobState current = state;
+        return new Snapshot(id, targetFile, createdAt, progress.get(),
+                current.status(), current.message());
     }
 
     // A cancelled job stays cancelled: late updates from the worker thread are ignored.
     synchronized void update(String status, String message) {
-        if (isCancelled()) {
+        if ("CANCELLED".equals(state.status())) {
             return;
         }
-        this.status = status;
-        this.message = message;
+        state = new JobState(status, message);
     }
 
     /** Marks the job cancelled and interrupts its worker. Returns false if it is too late. */
     synchronized boolean cancel(String message) {
-        boolean active = switch (status) {
-            case "QUEUED", "DISCOVERING", "DOWNLOADING", "VERIFYING" -> true;
-            default -> false;
-        };
+        String currentStatus = state.status();
+        boolean active = "QUEUED".equals(currentStatus)
+                || "DISCOVERING".equals(currentStatus)
+                || "DOWNLOADING".equals(currentStatus)
+                || "VERIFYING".equals(currentStatus);
+
         if (!active || finalizing) {
             return false;
         }
-        this.status = "CANCELLED";
-        this.message = message;
+
+        state = new JobState("CANCELLED", message);
         Future<?> running = task;
         if (running != null) {
             running.cancel(true);
@@ -78,18 +84,33 @@ public final class DownloadJob {
 
     /** Called right before the finished file is moved into place. False means it was cancelled. */
     synchronized boolean beginFinalize() {
-        if (isCancelled()) {
+        if ("CANCELLED".equals(state.status())) {
             return false;
         }
         finalizing = true;
         return true;
     }
 
-    void attach(Future<?> task) {
+    synchronized void attach(Future<?> task) {
         this.task = task;
+        if ("CANCELLED".equals(state.status())) {
+            task.cancel(true);
+        }
     }
 
-    void setProgress(int value) {
+    synchronized void setProgress(int value) {
         progress.set(value);
+    }
+
+    public record Snapshot(
+            String id,
+            String targetFile,
+            Instant createdAt,
+            int progress,
+            String status,
+            String message) {
+    }
+
+    private record JobState(String status, String message) {
     }
 }

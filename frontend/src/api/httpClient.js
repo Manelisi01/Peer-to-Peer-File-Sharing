@@ -1,23 +1,30 @@
-// Generic HTTP helper. Knows nothing about Openwire endpoints.
-export async function request(path, options = {}) {
+export async function request(path, options) {
+  if (options === undefined) {
+    options = {};
+  }
+
   const response = await fetch(path, options);
   const contentType = response.headers.get('content-type') || '';
-  const body = contentType.includes('application/json')
-    ? await response.json()
-    : await response.text();
+
+  let body;
+  if (contentType.indexOf('application/json') !== -1) {
+    body = await response.json();
+  } else {
+    body = await response.text();
+  }
 
   if (!response.ok) {
-    const message =
-      (typeof body === 'string' ? body : body.message || body.error) ||
-      `Request failed (${response.status})`;
+    const message = typeof body === 'string' ? body : (body.message || body.error || ('Request failed (' + response.status + ')'));
     throw new Error(message);
   }
+
   return body;
 }
 
-export const jsonPost = (path, payload) =>
-  request(path, {
+export function jsonPost(path, payload) {
+  return request(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
+}

@@ -1,6 +1,20 @@
 import { ChevronDown, Network, RefreshCw, Server } from 'lucide-react';
 
-export default function Topbar({ online, settingsOpen, onRefresh, onToggleSettings }) {
+export default function Topbar(props) {
+  const { online, settingsOpen, onRefresh, onToggleSettings } = props;
+
+  let connectionClass = 'connection-indicator';
+  if (online) {
+    connectionClass += ' is-online';
+  } else {
+    connectionClass += ' is-offline';
+  }
+
+  let chevronClass = '';
+  if (settingsOpen) {
+    chevronClass = 'chevron-up';
+  }
+
   return (
     <header className="topbar">
       <a className="brand" href="#top" aria-label="Openwire home">
@@ -13,14 +27,14 @@ export default function Topbar({ online, settingsOpen, onRefresh, onToggleSettin
         <button className="icon-button refresh-button" onClick={onRefresh} title="Refresh status" aria-label="Refresh status">
           <RefreshCw size={16} />
         </button>
-        <div className={`connection-indicator ${online ? 'is-online' : 'is-offline'}`}>
+        <div className={connectionClass}>
           <span className="connection-dot" />
           <span>{online ? 'Online' : 'Offline'}</span>
         </div>
         <button className="network-trigger" onClick={onToggleSettings}>
           <span className="network-trigger-icon"><Server size={15} /></span>
           <span>Node settings</span>
-          <ChevronDown size={14} className={settingsOpen ? 'chevron-up' : ''} />
+          <ChevronDown size={14} className={chevronClass} />
         </button>
       </div>
     </header>

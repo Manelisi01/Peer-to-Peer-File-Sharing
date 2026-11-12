@@ -15,7 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HexFormat;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -72,8 +72,8 @@ public class SeederService {
 
         // If this path is already shared but its content has changed, the old entry is stale
         // and would serve the wrong bytes, so drop it first.
-        for (PortListener listener : List.copyOf(listeners.values())) {
-            for (SharedFile shared : List.copyOf(listener.files.values())) {
+        for (PortListener listener : new ArrayList<>(listeners.values())) {
+            for (SharedFile shared : new ArrayList<>(listener.files.values())) {
                 if (shared.file.equals(normalizedFile) && !shared.fileHash.equals(hash)) {
                     removeShared(listener, shared);
                 }
@@ -111,20 +111,27 @@ public class SeederService {
     }
 
     public int getSharedFileCount() {
-        return listeners.values().stream().mapToInt(l -> l.files.size()).sum();
+        int count = 0;
+        for (PortListener listener : listeners.values()) {
+            count += listener.files.size();
+        }
+        return count;
     }
 
     public List<SharingInfo> getSharedFiles() {
-        return listeners.values().stream()
-                .flatMap(l -> l.files.values().stream())
-                .map(SharedFile::info)
-                .toList();
+        List<SharingInfo> result = new ArrayList<>();
+        for (PortListener listener : listeners.values()) {
+            for (SharedFile shared : listener.files.values()) {
+                result.add(shared.info);
+            }
+        }
+        return result;
     }
 
     public synchronized void stopSharing(Path file) {
         Path normalizedFile = file.toAbsolutePath().normalize();
-        for (PortListener listener : List.copyOf(listeners.values())) {
-            for (SharedFile shared : List.copyOf(listener.files.values())) {
+        for (PortListener listener : new ArrayList<>(listeners.values())) {
+            for (SharedFile shared : new ArrayList<>(listener.files.values())) {
                 if (shared.file.equals(normalizedFile)) {
                     removeShared(listener, shared);
                 }
@@ -136,7 +143,7 @@ public class SeederService {
     public synchronized int stopSharingByHash(String fileHash) {
         String hash = fileHash.toLowerCase(Locale.ROOT);
         int stopped = 0;
-        for (PortListener listener : List.copyOf(listeners.values())) {
+        for (PortListener listener : new ArrayList<>(listeners.values())) {
             SharedFile shared = listener.files.get(hash);
             if (shared != null) {
                 removeShared(listener, shared);
@@ -164,19 +171,22 @@ public class SeederService {
 
     @Scheduled(fixedRateString = "${p2p.tracker.heartbeat-ms:30000}")
     void sendHeartbeats() {
-        listeners.values().forEach(l ->
-                l.files.values().forEach(shared -> sendTrackerMessage(shared, "UPDATE")));
+        for (PortListener listener : listeners.values()) {
+            for (SharedFile shared : listener.files.values()) {
+                sendTrackerMessage(shared, "UPDATE");
+            }
+        }
     }
 
     @PreDestroy
     void stop() {
-        listeners.values().forEach(listener -> {
+        for (PortListener listener : listeners.values()) {
             try {
                 listener.server.close();
             } catch (IOException e) {
                 log.debug("Error closing seeder socket", e);
             }
-        });
+        }
         workers.shutdownNow();
     }
 
@@ -202,11 +212,12 @@ public class SeederService {
             socket.setSoTimeout(REQUEST_TIMEOUT_MS);
             byte[] hashBytes = new byte[HASH_BYTES];
             input.readFully(hashBytes);
-            SharedFile shared = listener.files.get(HexFormat.of().formatHex(hashBytes));
+            int chunkNumber = input.readInt();
+            String fileHash = FileHasher.toHexString(hashBytes);
+            SharedFile shared = listener.files.get(fileHash);
             if (shared == null) {
                 return;
             }
-            int chunkNumber = input.readInt();
             if (chunkNumber == -1) {
                 output.writeInt(shared.totalChunks);
                 output.flush();
@@ -251,15 +262,34 @@ public class SeederService {
     }
 
 
-    private record SharedFile(
-            Path file,
-            long fileSize,
-            int totalChunks,
-            String trackerHost,
-            int trackerPort,
-            String peerIp,
-            String fileHash,
-            SharingInfo info) {
+    private static class SharedFile {
+        private final Path file;
+        private final long fileSize;
+        private final int totalChunks;
+        private final String trackerHost;
+        private final int trackerPort;
+        private final String peerIp;
+        private final String fileHash;
+        private final SharingInfo info;
+
+        private SharedFile(
+                Path file,
+                long fileSize,
+                int totalChunks,
+                String trackerHost,
+                int trackerPort,
+                String peerIp,
+                String fileHash,
+                SharingInfo info) {
+            this.file = file;
+            this.fileSize = fileSize;
+            this.totalChunks = totalChunks;
+            this.trackerHost = trackerHost;
+            this.trackerPort = trackerPort;
+            this.peerIp = peerIp;
+            this.fileHash = fileHash;
+            this.info = info;
+        }
     }
 
     private static final class PortListener {

@@ -32,10 +32,31 @@ public final class FileHasher {
             }
         }
 
-        StringBuilder hash = new StringBuilder(64);
-        for (byte value : digest.digest()) {
-            hash.append(String.format("%02x", value));
+        return toHexString(digest.digest());
+    }
+
+    public static String toHexString(byte[] values) {
+        StringBuilder result = new StringBuilder(values.length * 2);
+
+        for (byte value : values) {
+            result.append(String.format("%02x", value & 0xff));
         }
-        return hash.toString();
+
+        return result.toString();
+    }
+
+    public static byte[] fromHexString(String value) {
+        if (value.length() % 2 != 0) {
+            throw new IllegalArgumentException("Hex value must contain pairs of characters.");
+        }
+
+        byte[] result = new byte[value.length() / 2];
+
+        for (int i = 0; i < value.length(); i += 2) {
+            String twoDigits = value.substring(i, i + 2);
+            result[i / 2] = (byte) Integer.parseInt(twoDigits, 16);
+        }
+
+        return result;
     }
 }

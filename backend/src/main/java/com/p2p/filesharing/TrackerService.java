@@ -38,25 +38,24 @@ public class TrackerService {
     private long peerTimeoutMs;
 
     private final Map<String, PeerInfo> peers = new ConcurrentHashMap<>();
-    private volatile DatagramSocket serverSocket;
-    private volatile Thread serverThread;
+    private DatagramSocket serverSocket;
 
     @PostConstruct
-    void start() {
+    synchronized void start() {
         if (!enabled) {
             log.info("Embedded P2P tracker is disabled.");
             return;
         }
         try {
-            serverSocket = new DatagramSocket(udpPort);
-            serverThread = new Thread(this::listen, "p2p-tracker-udp");
+            DatagramSocket socket = new DatagramSocket(udpPort);
+            serverSocket = socket;
+            Thread serverThread = new Thread(() -> listen(socket), "p2p-tracker-udp");
             serverThread.setDaemon(true);
             serverThread.start();
             log.info("P2P tracker listening on UDP port {}", udpPort);
         } catch (IOException e) {
             enabled = false;
             serverSocket = null;
-            serverThread = null;
             log.warn("UDP port {} is already in use; disabling the embedded tracker. "
                     + "Set p2p.tracker.enabled=false or choose a free p2p.tracker.udp-port to enable it.",
                     udpPort, e);
@@ -64,7 +63,7 @@ public class TrackerService {
     }
 
     @PreDestroy
-    void stop() {
+    synchronized void stop() {
         if (serverSocket != null) {
             serverSocket.close();
         }
@@ -115,17 +114,17 @@ public class TrackerService {
         }
     }
 
-    private void listen() {
-        while (!serverSocket.isClosed()) {
+    private void listen(DatagramSocket socket) {
+        while (!socket.isClosed()) {
             byte[] buffer = new byte[BUFFER_SIZE];
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
             try {
-                serverSocket.receive(packet);
+                socket.receive(packet);
                 String message = new String(packet.getData(), packet.getOffset(),
                         packet.getLength(), StandardCharsets.UTF_8).trim();
-                handleMessage(packet, message);
+                handleMessage(packet, message, socket);
             } catch (IOException e) {
-                if (!serverSocket.isClosed()) {
+                if (!socket.isClosed()) {
                     log.warn("Tracker UDP receive failed", e);
                 }
             } catch (IllegalArgumentException e) {
@@ -134,28 +133,42 @@ public class TrackerService {
         }
     }
 
-    private void handleMessage(DatagramPacket packet, String message) throws IOException {
+    private void handleMessage(DatagramPacket packet, String message, DatagramSocket socket)
+            throws IOException {
         String[] parts = message.split("\\|", -1);
         if (parts.length == 0) {
             throw new IllegalArgumentException("Empty command.");
         }
 
-        switch (parts[0]) {
-            case "REGISTER", "UPDATE" -> updatePeer(parts);
-            case "UNREGISTER" -> removePeer(parts);
-            case "QUERY" -> {
-                if (parts.length != 2) {
-                    throw new IllegalArgumentException("QUERY requires: QUERY|hash");
-                }
-                List<String> matches = getPeers(parts[1]).stream()
-                        .map(peer -> peer.ip() + ":" + peer.port())
-                        .toList();
-                byte[] response = String.join(",", matches).getBytes(StandardCharsets.UTF_8);
-                serverSocket.send(new DatagramPacket(response, response.length,
-                        packet.getAddress(), packet.getPort()));
-            }
-            default -> throw new IllegalArgumentException("Unknown command: " + parts[0]);
+        String command = parts[0];
+        if ("REGISTER".equals(command) || "UPDATE".equals(command)) {
+            updatePeer(parts);
+            return;
         }
+
+        if ("UNREGISTER".equals(command)) {
+            removePeer(parts);
+            return;
+        }
+
+        if ("QUERY".equals(command)) {
+            if (parts.length != 2) {
+                throw new IllegalArgumentException("QUERY requires: QUERY|hash");
+            }
+
+            List<String> matches = new ArrayList<>();
+            for (PeerAddress peer : getPeers(parts[1])) {
+                matches.add(peer.ip() + ":" + peer.port());
+            }
+
+            String responseText = String.join(",", matches);
+            byte[] response = responseText.getBytes(StandardCharsets.UTF_8);
+            socket.send(new DatagramPacket(response, response.length,
+                    packet.getAddress(), packet.getPort()));
+            return;
+        }
+
+        throw new IllegalArgumentException("Unknown command: " + command);
     }
 
     private void updatePeer(String[] parts) {
@@ -167,10 +180,12 @@ public class TrackerService {
         int port = validatePort(parts[3]);
         // One address can seed many files, so the entry is keyed by hash as well.
         String key = peerKey(hash, ip, port);
-        if ("UPDATE".equals(parts[0]) && !peers.containsKey(key)) {
+        PeerInfo updatedPeer = new PeerInfo(ip, port, hash, System.currentTimeMillis());
+        if ("UPDATE".equals(parts[0])) {
+            peers.computeIfPresent(key, (existingKey, existingPeer) -> updatedPeer);
             return;
         }
-        peers.put(key, new PeerInfo(ip, port, hash, System.currentTimeMillis()));
+        peers.put(key, updatedPeer);
     }
 
     private void removePeer(String[] parts) {
@@ -190,7 +205,12 @@ public class TrackerService {
     @Scheduled(fixedDelayString = "${p2p.tracker.cleanup-interval-ms:5000}")
     void removeStalePeers() {
         long cutoff = System.currentTimeMillis() - peerTimeoutMs;
-        peers.entrySet().removeIf(entry -> entry.getValue().lastSeen < cutoff);
+        for (Map.Entry<String, PeerInfo> entry : peers.entrySet()) {
+            PeerInfo peer = entry.getValue();
+            if (peer.lastSeen < cutoff) {
+                peers.remove(entry.getKey(), peer);
+            }
+        }
     }
 
     private static InetSocketAddress parsePeerAddress(String address) {
@@ -238,6 +258,17 @@ public class TrackerService {
         }
     }
 
-    private record PeerInfo(String ip, int port, String fileHash, long lastSeen) {
+    private static class PeerInfo {
+        private final String ip;
+        private final int port;
+        private final String fileHash;
+        private final long lastSeen;
+
+        private PeerInfo(String ip, int port, String fileHash, long lastSeen) {
+            this.ip = ip;
+            this.port = port;
+            this.fileHash = fileHash;
+            this.lastSeen = lastSeen;
+        }
     }
 }

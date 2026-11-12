@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { ArrowDownToLine, HardDrive, LoaderCircle } from 'lucide-react';
 
-export default function DownloadForm({ submitting, onSubmit }) {
+export default function DownloadForm(props) {
+  const { submitting, onSubmit } = props;
   const [targetFile, setTargetFile] = useState('');
 
   async function handleSubmit(event) {
     event.preventDefault();
     const queued = await onSubmit(targetFile);
-    if (queued) setTargetFile('');
+    if (queued) {
+      setTargetFile('');
+    }
   }
 
   return (
@@ -19,7 +22,14 @@ export default function DownloadForm({ submitting, onSubmit }) {
 
       <label htmlFor="target-file">SAVE AS</label>
       <div className="input-with-button">
-        <input id="target-file" value={targetFile} onChange={(e) => setTargetFile(e.target.value)} placeholder="filename.pdf, video.mp4, archive.zip" />
+        <input
+          id="target-file"
+          value={targetFile}
+          onChange={function (event) {
+            setTargetFile(event.target.value);
+          }}
+          placeholder="filename.pdf, video.mp4, archive.zip"
+        />
         <button type="submit" className="download-button" disabled={submitting}>
           {submitting ? <LoaderCircle className="spin" size={16} /> : <ArrowDownToLine size={16} />}<span>Download</span>
         </button>

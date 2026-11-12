@@ -1,5 +1,10 @@
 import {
-  FileArchive, FileAudio2, FileCode2, FileImage, FileText, HardDrive,
+  FileArchive,
+  FileAudio2,
+  FileCode2,
+  FileImage,
+  FileText,
+  HardDrive
 } from 'lucide-react';
 
 const ICON_BY_EXTENSION = [
@@ -7,12 +12,26 @@ const ICON_BY_EXTENSION = [
   [['mp3', 'wav', 'flac', 'm4a'], FileAudio2],
   [['png', 'jpg', 'jpeg', 'gif', 'webp'], FileImage],
   [['js', 'java', 'json', 'py', 'ts', 'html', 'css'], FileCode2],
-  [['txt', 'md', 'pdf', 'doc', 'docx'], FileText],
+  [['txt', 'md', 'pdf', 'doc', 'docx'], FileText]
 ];
 
-export function fileIcon(name = '') {
+export function fileIcon(name) {
+  if (name === undefined) {
+    name = '';
+  }
+
   const parts = name.split('.');
   const ext = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
-  const match = ICON_BY_EXTENSION.find(([exts]) => exts.includes(ext));
-  return match ? match[1] : HardDrive;
+
+  for (let i = 0; i < ICON_BY_EXTENSION.length; i += 1) {
+    const item = ICON_BY_EXTENSION[i];
+    const exts = item[0];
+    const icon = item[1];
+
+    if (exts.indexOf(ext) !== -1) {
+      return icon;
+    }
+  }
+
+  return HardDrive;
 }

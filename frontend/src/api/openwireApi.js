@@ -1,58 +1,76 @@
-// The only module that knows endpoint URLs and payload shapes.
 import { request, jsonPost } from './httpClient';
 
 export const openwireApi = {
-  getStatus: () => request('/api/status'),
-  getSeeders: () => request('/api/seeders'),
-  getNetworkInfo: () => request('/api/network-info'),
+  getStatus: function () {
+    return request('/api/status');
+  },
 
-  uploadFile(file) {
+  getSeeders: function () {
+    return request('/api/seeders');
+  },
+
+  getNetworkInfo: function () {
+    return request('/api/network-info');
+  },
+
+  uploadFile: function (file) {
     const form = new FormData();
     form.append('file', file);
     return request('/api/files', { method: 'POST', body: form });
   },
 
-  // Desktop app: files are hashed and shared where they are, without being copied.
-  hashLocalFile: (path) => jsonPost('/api/files/local', { path }),
+  hashLocalFile: function (path) {
+    return jsonPost('/api/files/local', { path: path });
+  },
 
-  startSeedingLocal: (path, net) =>
-    jsonPost('/api/seeders/local', {
-      path,
+  startSeedingLocal: function (path, net) {
+    return jsonPost('/api/seeders/local', {
+      path: path,
       peerIp: net.peerIp,
       peerPort: Number(net.peerPort),
       trackerHost: net.trackerHost,
-      trackerPort: Number(net.trackerPort),
-    }),
+      trackerPort: Number(net.trackerPort)
+    });
+  },
 
-  // Stops sharing only; the file itself is never touched.
-  stopSharing: (hash) =>
-    request(`/api/seeders?hash=${encodeURIComponent(hash)}`, { method: 'DELETE' }),
+  stopSharing: function (hash) {
+    return request('/api/seeders?hash=' + encodeURIComponent(hash), { method: 'DELETE' });
+  },
 
-  deleteFile: (fileName) =>
-    request(`/api/files?fileName=${encodeURIComponent(fileName)}`, { method: 'DELETE' }),
+  deleteFile: function (fileName) {
+    return request('/api/files?fileName=' + encodeURIComponent(fileName), { method: 'DELETE' });
+  },
 
-  startSeeding: (fileName, net) =>
-    jsonPost('/api/seeders', {
-      fileName,
+  startSeeding: function (fileName, net) {
+    return jsonPost('/api/seeders', {
+      fileName: fileName,
       peerIp: net.peerIp,
       peerPort: Number(net.peerPort),
       trackerHost: net.trackerHost,
-      trackerPort: Number(net.trackerPort),
-    }),
+      trackerPort: Number(net.trackerPort)
+    });
+  },
 
-  findPeers: (hash, net) => request(`/api/peers?hash=${encodeURIComponent(hash)}&trackerHost=${encodeURIComponent(net.trackerHost)}&trackerPort=${encodeURIComponent(net.trackerPort)}`),
+  findPeers: function (hash, net) {
+    return request('/api/peers?hash=' + encodeURIComponent(hash) + '&trackerHost=' + encodeURIComponent(net.trackerHost) + '&trackerPort=' + encodeURIComponent(net.trackerPort));
+  },
 
-  startDownload: ({ targetFile, fileHash }, net) =>
-    jsonPost('/api/downloads', {
-      targetFile,
-      fileHash,
+  startDownload: function (info, net) {
+    return jsonPost('/api/downloads', {
+      targetFile: info.targetFile,
+      fileHash: info.fileHash,
       trackerHost: net.trackerHost,
       trackerPort: Number(net.trackerPort),
       peerIp: net.peerIp,
-      peerPort: Number(net.peerPort),
-    }),
+      peerPort: Number(net.peerPort)
+    });
+  },
 
-  getDownload: (id) => request(`/api/downloads/${id}`),
+  getDownload: function (id) {
+    return request('/api/downloads/' + id);
+  },
 
-  cancelDownload: (id) => request(`/api/downloads/${id}/cancel`, { method: 'POST' }),
+  cancelDownload: function (id) {
+    return request('/api/downloads/' + id + '/cancel', { method: 'POST' });
+  }
 };
